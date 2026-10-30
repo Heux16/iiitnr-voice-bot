@@ -1,59 +1,1205 @@
 {
-  "built_at": "2026-09-15T01:45:53+00:00",
+  "built_at": "2026-10-30T08:34:28+00:00",
   "source_documents": [
     {
-      "name": "Buku-Pedoman-Akademik-Fakultas-Teknologi-Industri-2025-2026.pdf",
-      "sha256": "0c2dfd05681978bc2bf9f2ec05c33e5e249d6857cde174d116f4a8085d8c25e5",
-      "size_bytes": 66122322,
-      "pages_with_text": 83,
-      "chunks": 218,
+      "name": "academic_calendar_2026.md",
+      "sha256": "eca9d9250b620419557111169d637be19f209baaa8301372eadd6ff18ac31491",
+      "size_bytes": 3878,
+      "pages_with_text": 3,
+      "chunks": 3,
       "extraction": {
-        "lines_raw": 5518,
-        "lines_kept": 4206,
-        "dropped": {
-          "header/footer berjalan": 83,
-          "kode glyph (cid:NN)": 140,
-          "baris terlalu pendek": 614,
-          "baris duplikat berurutan": 82,
-          "nomor halaman": 198,
-          "teks rusak (rotasi/terjalin)": 195
-        },
-        "pages_empty_after_cleaning": [
-          12,
-          14,
-          16,
-          20,
-          24,
-          53,
-          54,
-          55,
-          56,
-          57,
-          58,
-          59,
-          61,
-          66,
-          67,
-          68,
-          69,
-          70,
-          71,
-          72,
-          73,
-          77,
-          82,
-          83,
-          84,
-          89,
-          90,
-          91,
-          92
-        ]
+        "lines_raw": 55,
+        "lines_kept": 23,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "academic_framework_and_curriculum_charts.md",
+      "sha256": "e61589026eed1008fdb9a4c9c336af51403b644ff247c1df6ed26cc4b43c3dbe",
+      "size_bytes": 6806,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 96,
+        "lines_kept": 44,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_cse_curriculum_2022_2024.md",
+      "sha256": "b4194420bf7545fe8079ab56fbf7ac264d0050125b5c91d1ae4ea5c7cc59a352",
+      "size_bytes": 1470,
+      "pages_with_text": 1,
+      "chunks": 1,
+      "extraction": {
+        "lines_raw": 14,
+        "lines_kept": 2,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_cse_curriculum_2025.md",
+      "sha256": "9e1989a6caccd544b66410ce4e8b51448c967328d3a43778827305327224d8a0",
+      "size_bytes": 41066,
+      "pages_with_text": 67,
+      "chunks": 67,
+      "extraction": {
+        "lines_raw": 339,
+        "lines_kept": 230,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_cse_syllabus_2025.md",
+      "sha256": "dd7bee9d7a8d336f45c4a2a1cfe6ed4957c23e2b65512a92b0db5f071818ae5e",
+      "size_bytes": 309953,
+      "pages_with_text": 364,
+      "chunks": 364,
+      "extraction": {
+        "lines_raw": 2038,
+        "lines_kept": 1527,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_dsai_curriculum_2022_2024.md",
+      "sha256": "755f6d5be380ac913fe31202d27f88768db85d899331a12ee79accb5e7132599",
+      "size_bytes": 1743,
+      "pages_with_text": 2,
+      "chunks": 2,
+      "extraction": {
+        "lines_raw": 50,
+        "lines_kept": 37,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_dsai_curriculum_2025.md",
+      "sha256": "6f0a4e701913c5ecc46b27ff9f97e723a4dae15aaff3ccfd053197bcd8a995a8",
+      "size_bytes": 23902,
+      "pages_with_text": 51,
+      "chunks": 51,
+      "extraction": {
+        "lines_raw": 516,
+        "lines_kept": 403,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_dsai_syllabus_2025.md",
+      "sha256": "708b9629ba3681b7ff638f8335784e7666cdd3cf28dbd92e7dffc6d1a7d2d1de",
+      "size_bytes": 220998,
+      "pages_with_text": 284,
+      "chunks": 284,
+      "extraction": {
+        "lines_raw": 4267,
+        "lines_kept": 3738,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_ece_curriculum_2019_2024.md",
+      "sha256": "2579e571e310799935bd649812b089e1c15eb1a43338459751efbefc4a43a289",
+      "size_bytes": 5145,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 67,
+        "lines_kept": 53,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_ece_curriculum_2022_2024.md",
+      "sha256": "f202abe215a57bce17bc9776a9321c41da1467244062f799eced497d16074a70",
+      "size_bytes": 1760,
+      "pages_with_text": 2,
+      "chunks": 2,
+      "extraction": {
+        "lines_raw": 48,
+        "lines_kept": 35,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_ece_syllabus_2025.md",
+      "sha256": "07efa305ae61e7f88fd12645f51228b319989708f259c3a81f2d11ce2421d32d",
+      "size_bytes": 220950,
+      "pages_with_text": 288,
+      "chunks": 288,
+      "extraction": {
+        "lines_raw": 4251,
+        "lines_kept": 3702,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_syllabus_2025_onwards.md",
+      "sha256": "01cf1b55a5b550af26ea32f3f532c27a14777ace26c65f352d729838df64bc36",
+      "size_bytes": 94403,
+      "pages_with_text": 110,
+      "chunks": 110,
+      "extraction": {
+        "lines_raw": 1062,
+        "lines_kept": 923,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mtech_cmit_fellowship_curriculum.md",
+      "sha256": "baefc8f0e103d554751098133d6ad9eafc13fda94506d70b568fd46c9a32c852",
+      "size_bytes": 10068,
+      "pages_with_text": 18,
+      "chunks": 18,
+      "extraction": {
+        "lines_raw": 211,
+        "lines_kept": 160,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mtech_cse_curriculum_2025.md",
+      "sha256": "51a53006f15126d46389131a5aea3cb083a0c7091a3fc380d2aa99ddb9c081c8",
+      "size_bytes": 16661,
+      "pages_with_text": 26,
+      "chunks": 26,
+      "extraction": {
+        "lines_raw": 281,
+        "lines_kept": 223,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mtech_ece_curriculum_2025.md",
+      "sha256": "bc036c00c9e1460594bba29b84eea53f00ac388c9fe9c39f08258cdc2b375568",
+      "size_bytes": 16817,
+      "pages_with_text": 26,
+      "chunks": 26,
+      "extraction": {
+        "lines_raw": 281,
+        "lines_kept": 225,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "phd_scholars_directory.md",
+      "sha256": "0bcc1b780bf7ab2f8f13e2e6bf822172e4394c1ee73fc76c700f48b16c24ec4c",
+      "size_bytes": 50213,
+      "pages_with_text": 50,
+      "chunks": 50,
+      "extraction": {
+        "lines_raw": 544,
+        "lines_kept": 270,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_admission_brochure_2026.md",
+      "sha256": "f458509a2aa13e2cffcb61fbafd2b2908cd364180d97e538a59b646ccffee6c7",
+      "size_bytes": 14608,
+      "pages_with_text": 18,
+      "chunks": 18,
+      "extraction": {
+        "lines_raw": 343,
+        "lines_kept": 294,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "btech_admissions_2026_portal.md",
+      "sha256": "e76af368cf5eaf7d47e3fb2c11fe7a26076f69c21f8cdf6a53e2cbadd32b9c46",
+      "size_bytes": 4710,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 77,
+        "lines_kept": 42,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "josaa_csab_reporting_instructions_2026.md",
+      "sha256": "68748d865ef37b99f328844f3acfb3fe10953741604bb79f79266465f3004c7a",
+      "size_bytes": 5948,
+      "pages_with_text": 8,
+      "chunks": 8,
+      "extraction": {
+        "lines_raw": 104,
+        "lines_kept": 81,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mtech_admissions_2026_portal.md",
+      "sha256": "27fd15ce122bc6989170177aa7e6f8bafcf8ea03d8e7c89cc4f5abfd180228cd",
+      "size_bytes": 4889,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 64,
+        "lines_kept": 39,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mtech_dsai_cmit_fellowship_2026.md",
+      "sha256": "99ff464f135b9d4f2292d597164df7b1b9d7f07e847f418aaab8503b16b99aaf",
+      "size_bytes": 9342,
+      "pages_with_text": 9,
+      "chunks": 9,
+      "extraction": {
+        "lines_raw": 141,
+        "lines_kept": 92,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "phd_admissions_autumn_2026.md",
+      "sha256": "bc6421ef3e510e4e288a20a2d282e4bba24766d622a0d07fbb7a202c62803b85",
+      "size_bytes": 4136,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 50,
+        "lines_kept": 31,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "abhishek_sharma.md",
+      "sha256": "7ca031f1f366c4a7fe9469f42ad97e743e155c69a7dad7af1edba27aac382ab7",
+      "size_bytes": 2848,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 83,
+        "lines_kept": 38,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "adjunct_faculty.md",
+      "sha256": "a146ceba77331bf8afb2bc094c689d7a36f7323a03841596d3381f7cdc59600b",
+      "size_bytes": 3990,
+      "pages_with_text": 4,
+      "chunks": 4,
+      "extraction": {
+        "lines_raw": 77,
+        "lines_kept": 34,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "amit_kumar_agrawal.md",
+      "sha256": "7fe9dbd49f009f2da78ed5c5124859ae82b22345a32f97cb2ab4df6d9ec186c1",
+      "size_bytes": 7362,
+      "pages_with_text": 11,
+      "chunks": 11,
+      "extraction": {
+        "lines_raw": 120,
+        "lines_kept": 72,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "anurag_singh.md",
+      "sha256": "cc5dd92fbfd0b9af8ecabf94a0c82d8d06468ef98436bef1b3a061445bff5eb3",
+      "size_bytes": 7641,
+      "pages_with_text": 12,
+      "chunks": 12,
+      "extraction": {
+        "lines_raw": 119,
+        "lines_kept": 69,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "aruna_shukla.md",
+      "sha256": "923ea867a7a1dd7ea0f145b4c3457a9f033d46ed31f569ae712cfaffcc7c26bc",
+      "size_bytes": 3105,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 77,
+        "lines_kept": 36,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "avantika_singh.md",
+      "sha256": "43f73dbbe79a86fddab70ee607f88af6f6b80e77a987de67f9bceb05d87efe4c",
+      "size_bytes": 5243,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 98,
+        "lines_kept": 45,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "bipin_chandra_mandi.md",
+      "sha256": "5859845508d6224d8783297f42f58bd5fae2634a11287cf2a96ec1a7a513d07f",
+      "size_bytes": 16462,
+      "pages_with_text": 18,
+      "chunks": 18,
+      "extraction": {
+        "lines_raw": 181,
+        "lines_kept": 129,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "chandra_shekhar_nishad.md",
+      "sha256": "4e27bf8e76f33a076a7d6dc8e55ee4feda761e9e852ec2be5bb11119e3b61ab3",
+      "size_bytes": 11523,
+      "pages_with_text": 15,
+      "chunks": 15,
+      "extraction": {
+        "lines_raw": 127,
+        "lines_kept": 77,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "charu_krishna.md",
+      "sha256": "238a670223c3c823ecded3444c3d3bf8103f201623604ac99379cb4f613315cb",
+      "size_bytes": 802,
+      "pages_with_text": 1,
+      "chunks": 1,
+      "extraction": {
+        "lines_raw": 20,
+        "lines_kept": 5,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "darash_adhari.md",
+      "sha256": "7e59b22cb416f900f36665a48f6a9f6d8314fe78f4e7062b07aaff6c8253a29c",
+      "size_bytes": 7632,
+      "pages_with_text": 10,
+      "chunks": 10,
+      "extraction": {
+        "lines_raw": 135,
+        "lines_kept": 81,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "deepika_gupta.md",
+      "sha256": "5b29f7914f505c84da69abb953bb26c246a9ad0d5d292539ef21880872d52d4b",
+      "size_bytes": 4852,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 85,
+        "lines_kept": 43,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "distinguished_adjunct_faculty.md",
+      "sha256": "abfdc528377eea0158495979241dc535991e44d5e814e6000e9860fa9bed9c92",
+      "size_bytes": 3747,
+      "pages_with_text": 9,
+      "chunks": 9,
+      "extraction": {
+        "lines_raw": 119,
+        "lines_kept": 55,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "emeritus_visits.md",
+      "sha256": "d45164aad2eebbdefa96a205ce43ae25c929962a76b9191ada7f6181f50cdbdd",
+      "size_bytes": 9296,
+      "pages_with_text": 10,
+      "chunks": 10,
+      "extraction": {
+        "lines_raw": 120,
+        "lines_kept": 66,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "faculty_directory.md",
+      "sha256": "6212748b18551dadb6358b68338ca8256e73789f5970df7bc4c4338432218f91",
+      "size_bytes": 5587,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 56,
+        "lines_kept": 43,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "international_visiting_faculty.md",
+      "sha256": "40d3471129c61892d86146d110345c5f99ca48c2b5db598ca8694a5b852b72dc",
+      "size_bytes": 1541,
+      "pages_with_text": 2,
+      "chunks": 2,
+      "extraction": {
+        "lines_raw": 59,
+        "lines_kept": 25,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "kavita_jaiswal.md",
+      "sha256": "cf8e729f404e191dd783f25d86efafe20586385669f71ec5df43a64ef2e667ad",
+      "size_bytes": 6304,
+      "pages_with_text": 9,
+      "chunks": 9,
+      "extraction": {
+        "lines_raw": 98,
+        "lines_kept": 53,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "khilesh_kumar.md",
+      "sha256": "605db5045ffb3bebeeb4b187af4b34eb3491d301345175e0920f18b5744a9bc1",
+      "size_bytes": 1223,
+      "pages_with_text": 1,
+      "chunks": 1,
+      "extraction": {
+        "lines_raw": 23,
+        "lines_kept": 7,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "kumar_gaurav_atram.md",
+      "sha256": "21b38bda1b4f924933fd6312790bf8c87ce8b31776c8b40db72d5f8876a4ba8c",
+      "size_bytes": 2205,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 75,
+        "lines_kept": 34,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "lakhindar_murmu.md",
+      "sha256": "0745d2c7787d94cd1c69846fc725d89e7401ebcc08db2679166730ea2f7194f3",
+      "size_bytes": 2751,
+      "pages_with_text": 4,
+      "chunks": 4,
+      "extraction": {
+        "lines_raw": 72,
+        "lines_kept": 33,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "maifuz_ali.md",
+      "sha256": "3073f5661020ddd802d41521708420966778381bcbfac0813936cc44be14e091",
+      "size_bytes": 6796,
+      "pages_with_text": 11,
+      "chunks": 11,
+      "extraction": {
+        "lines_raw": 109,
+        "lines_kept": 60,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mallikharjuna_rao_k.md",
+      "sha256": "b6d747a71b496bd6c2c3be19391f98fc445dea8a062634857d8d60c4ae8324ce",
+      "size_bytes": 11751,
+      "pages_with_text": 13,
+      "chunks": 13,
+      "extraction": {
+        "lines_raw": 199,
+        "lines_kept": 139,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "manoj_kumar_majumder.md",
+      "sha256": "9a42d5a1bee9c0999ae8b16771a8bf425b4006472220ce5eb6200b92eed18a31",
+      "size_bytes": 50134,
+      "pages_with_text": 44,
+      "chunks": 44,
+      "extraction": {
+        "lines_raw": 340,
+        "lines_kept": 261,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "mithilesh_kumar_chaube.md",
+      "sha256": "e92ada07de34893338e43f0da2f9dfba64c20a8ccdf9d5519ee88d780b52c6bb",
+      "size_bytes": 5837,
+      "pages_with_text": 10,
+      "chunks": 10,
+      "extraction": {
+        "lines_raw": 110,
+        "lines_kept": 63,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "nisha_rani_mahato.md",
+      "sha256": "fd0654d988ca315585fea033250963014f13e168ff4e8f965d58a419cc57b23c",
+      "size_bytes": 2799,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 88,
+        "lines_kept": 43,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "punya_prasanna_paltani.md",
+      "sha256": "242d66341cb4cf90f4bc1887ef6a6005bfaf5793245bbe14c9ee5034fcfc6975",
+      "size_bytes": 17224,
+      "pages_with_text": 19,
+      "chunks": 19,
+      "extraction": {
+        "lines_raw": 177,
+        "lines_kept": 128,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "ramakrishna_bandi.md",
+      "sha256": "12c7941c05fcc08f61c882a3acd91cebfafe6ee1bba877bd75c6b8d1b111f37b",
+      "size_bytes": 7910,
+      "pages_with_text": 12,
+      "chunks": 12,
+      "extraction": {
+        "lines_raw": 120,
+        "lines_kept": 71,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "ruhul_amin.md",
+      "sha256": "db95ebc8288d5f000a1d63b31c48dae555cdb611ba2bec551192713e33661eed",
+      "size_bytes": 2796,
+      "pages_with_text": 3,
+      "chunks": 3,
+      "extraction": {
+        "lines_raw": 67,
+        "lines_kept": 29,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "santosh_kumar.md",
+      "sha256": "574a92741df42584cb7574b8da4fa4b24da580a87b553df17b305d9f66073511",
+      "size_bytes": 10187,
+      "pages_with_text": 14,
+      "chunks": 14,
+      "extraction": {
+        "lines_raw": 126,
+        "lines_kept": 77,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "satyanarayana_vollala.md",
+      "sha256": "8c13ad4476dd25834e70096bb7c63275f3fd2702ec135bcc7bc8ae1d20cd53de",
+      "size_bytes": 7789,
+      "pages_with_text": 13,
+      "chunks": 13,
+      "extraction": {
+        "lines_raw": 115,
+        "lines_kept": 65,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "shailesh_khapre.md",
+      "sha256": "1ece7875f1c5c743783f2e69f9369ea04d174b90c7a67dc7210710a6f2c6e543",
+      "size_bytes": 10421,
+      "pages_with_text": 13,
+      "chunks": 13,
+      "extraction": {
+        "lines_raw": 121,
+        "lines_kept": 71,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "shashi_tiwari.md",
+      "sha256": "13d7447df4d4ccfe2368913dd3887eb1e48110189492243e5ec1a8574da3555f",
+      "size_bytes": 7578,
+      "pages_with_text": 11,
+      "chunks": 11,
+      "extraction": {
+        "lines_raw": 108,
+        "lines_kept": 61,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "shrivishal_tripathi.md",
+      "sha256": "9d68e1fe5127decad76569388d27147bd6ec2f6631e012f8d75d5244cfef675f",
+      "size_bytes": 48896,
+      "pages_with_text": 47,
+      "chunks": 47,
+      "extraction": {
+        "lines_raw": 348,
+        "lines_kept": 284,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "shubhangi_nema.md",
+      "sha256": "6e34f22fe0d2b10f1c0e974dbbf4404f2d6d47bd16ea09a09aa97852a95530ea",
+      "size_bytes": 4639,
+      "pages_with_text": 8,
+      "chunks": 8,
+      "extraction": {
+        "lines_raw": 108,
+        "lines_kept": 54,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "sresha_yadav.md",
+      "sha256": "02a1589aeb9bf6cb3b583a6b367642823180172801db13013059d98d6eaf5797",
+      "size_bytes": 9405,
+      "pages_with_text": 13,
+      "chunks": 13,
+      "extraction": {
+        "lines_raw": 137,
+        "lines_kept": 89,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "srinivasa_k_g.md",
+      "sha256": "d7dd3c8595364323c5a76907f304897c98f9685b5072bcaf27b2236a0de578d9",
+      "size_bytes": 7197,
+      "pages_with_text": 10,
+      "chunks": 10,
+      "extraction": {
+        "lines_raw": 118,
+        "lines_kept": 67,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "srishti_bachwani.md",
+      "sha256": "80af091cd5484156aa8ff400f608dcfb313ff4477f521b9c6d0e59e774c217c3",
+      "size_bytes": 3797,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 76,
+        "lines_kept": 36,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "vijaya_j.md",
+      "sha256": "5ed3b08d8635dbc098826064138f19bd867b214d5ab28d2c246229bb5cba2b7b",
+      "size_bytes": 10634,
+      "pages_with_text": 12,
+      "chunks": 12,
+      "extraction": {
+        "lines_raw": 119,
+        "lines_kept": 72,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "vinay_kumar.md",
+      "sha256": "f967dd56461fca890c51df951a8a0f02a5c935cfa48194feecf2c96437a9a640",
+      "size_bytes": 16551,
+      "pages_with_text": 20,
+      "chunks": 20,
+      "extraction": {
+        "lines_raw": 189,
+        "lines_kept": 132,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "administrative_leadership_and_vision.md",
+      "sha256": "322a51f4e51afebf41cdfca306e7f4407226f779da3403990377221281e99825",
+      "size_bytes": 17764,
+      "pages_with_text": 19,
+      "chunks": 19,
+      "extraction": {
+        "lines_raw": 256,
+        "lines_kept": 124,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "aicte_extension_of_approval_2026_27.md",
+      "sha256": "52ad13610524f73ee42f9ff6a00429510cf5a41ad256442dc1f0d02586acc82d",
+      "size_bytes": 11907,
+      "pages_with_text": 20,
+      "chunks": 20,
+      "extraction": {
+        "lines_raw": 308,
+        "lines_kept": 223,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "annual_report_2022_2023.md",
+      "sha256": "40693980ecfa10586babaac0527028b2e2b3a67b0d864cb67262b614fd537cb8",
+      "size_bytes": 205993,
+      "pages_with_text": 207,
+      "chunks": 207,
+      "extraction": {
+        "lines_raw": 785,
+        "lines_kept": 585,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "anti_ragging_committee.md",
+      "sha256": "3fe4b8f43aef36d5365c988a804584bdc2e3fead8bc46b1929a43451c75c5041",
+      "size_bytes": 2335,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 46,
+        "lines_kept": 28,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "ariia_ranking_report.md",
+      "sha256": "72f0f5b40204f7eb423b553158d6e932edb19fd0d323d4fbb27abf14f4b37b58",
+      "size_bytes": 79306,
+      "pages_with_text": 97,
+      "chunks": 97,
+      "extraction": {
+        "lines_raw": 1534,
+        "lines_kept": 1323,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "articles_of_association.md",
+      "sha256": "41c2656bf7de3d18bb710c5a3837d3f1da0cbf59fd768df34e50fa69a09fe879",
+      "size_bytes": 20487,
+      "pages_with_text": 28,
+      "chunks": 28,
+      "extraction": {
+        "lines_raw": 372,
+        "lines_kept": 299,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "association_of_indian_universities_membership.md",
+      "sha256": "ce8ab6638f667bd8db607edaa4eeeda560706d99989688a778b849b9e84b201b",
+      "size_bytes": 2443,
+      "pages_with_text": 3,
+      "chunks": 3,
+      "extraction": {
+        "lines_raw": 56,
+        "lines_kept": 43,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "board_of_governors.md",
+      "sha256": "83aedd389de07a1eff17d06e4fc30db3945047ca4520b27241e181da12a53e62",
+      "size_bytes": 44311,
+      "pages_with_text": 48,
+      "chunks": 48,
+      "extraction": {
+        "lines_raw": 176,
+        "lines_kept": 103,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "campus_facilities_and_helpline.md",
+      "sha256": "2bffbae4dbacf729af40ebca98247f723b93c545ff6e1b67e7c0ea87378299d8",
+      "size_bytes": 823,
+      "pages_with_text": 1,
+      "chunks": 1,
+      "extraction": {
+        "lines_raw": 26,
+        "lines_kept": 8,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "combined_academic_regulations.md",
+      "sha256": "ce46ee83da986cddd54e5138c0f38862745a5ae72e3ae7d7c76575aaad3c799e",
+      "size_bytes": 7476,
+      "pages_with_text": 4,
+      "chunks": 4,
+      "extraction": {
+        "lines_raw": 98,
+        "lines_kept": 81,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "funded_initiatives.md",
+      "sha256": "aa32fdbe6c4706fc0ae5832c0088ad79dfdb9cfea31bf2a80a92fd59dbff8dec",
+      "size_bytes": 19080,
+      "pages_with_text": 16,
+      "chunks": 16,
+      "extraction": {
+        "lines_raw": 85,
+        "lines_kept": 68,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "guesthouse_facilities_and_charges.md",
+      "sha256": "801aac6ff36fd517fdda05862ec53acb59dd17a1bc0b947a4421d2b7b5ce524c",
+      "size_bytes": 5969,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 112,
+        "lines_kept": 97,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "institute_faqs.md",
+      "sha256": "f42b44ec988585d682fc380b5ceea2e0d10fe7c8d9f22943aad1330aafd23c7d",
+      "size_bytes": 6601,
+      "pages_with_text": 28,
+      "chunks": 28,
+      "extraction": {
+        "lines_raw": 150,
+        "lines_kept": 71,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "institute_faqs_brochure.md",
+      "sha256": "d285519622f8c2cbf3fa05e259084fdc7888523f181d044cba9e57a3d39c6acf",
+      "size_bytes": 8246,
+      "pages_with_text": 10,
+      "chunks": 10,
+      "extraction": {
+        "lines_raw": 155,
+        "lines_kept": 133,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "institute_laboratories_directory.md",
+      "sha256": "2e0725209040f4cb950838c2e3ff9a726647bf2d08b3be72b9a5391b9116fb36",
+      "size_bytes": 13442,
+      "pages_with_text": 16,
+      "chunks": 16,
+      "extraction": {
+        "lines_raw": 264,
+        "lines_kept": 228,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "institutional_overview_presentation.md",
+      "sha256": "7a143b9dc84aeac12be3d0aeabbd6d841a7c72b6b7ce4e1e69addaae53bc176f",
+      "size_bytes": 4395,
+      "pages_with_text": 12,
+      "chunks": 12,
+      "extraction": {
+        "lines_raw": 261,
+        "lines_kept": 137,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "it_infrastructure.md",
+      "sha256": "bf46b3e8be752503d1a88e19243d3fc674930268e6d8008ed912f77c3132ff8b",
+      "size_bytes": 4775,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 38,
+        "lines_kept": 15,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "library_at_a_glance.md",
+      "sha256": "2774575c742c807a5de63b18551ff117cee7539cce852b5675eecfbc3b9d0beb",
+      "size_bytes": 3515,
+      "pages_with_text": 3,
+      "chunks": 3,
+      "extraction": {
+        "lines_raw": 72,
+        "lines_kept": 46,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "nirf_engineering_ranking.md",
+      "sha256": "f78b576f315f95ab5aa45000584196f22d9a21efee2070516facd6bd5c384ff0",
+      "size_bytes": 22598,
+      "pages_with_text": 26,
+      "chunks": 26,
+      "extraction": {
+        "lines_raw": 314,
+        "lines_kept": 272,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "nirf_overall_ranking.md",
+      "sha256": "1857e4b985c877a51e674450843468a323b5410406830a955920974fdbc688a4",
+      "size_bytes": 25487,
+      "pages_with_text": 26,
+      "chunks": 26,
+      "extraction": {
+        "lines_raw": 373,
+        "lines_kept": 325,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "officers_and_staff_directory.md",
+      "sha256": "675d998243d0e3e6d35d09e600acfc5eb2dd56bccc63c6d2f1896586d40849f3",
+      "size_bytes": 3441,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 59,
+        "lines_kept": 33,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "patents.md",
+      "sha256": "3b6f80f066ec277f1605111ac64baf43debe188c5777696f8e6bce9cce81ed12",
+      "size_bytes": 11322,
+      "pages_with_text": 11,
+      "chunks": 11,
+      "extraction": {
+        "lines_raw": 259,
+        "lines_kept": 232,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "placement_statistics_and_recruiters.md",
+      "sha256": "ffea619ba5506cfca4c736d8141d68a79f67681a09b013124515b57e62104ccc",
+      "size_bytes": 2075,
+      "pages_with_text": 4,
+      "chunks": 4,
+      "extraction": {
+        "lines_raw": 70,
+        "lines_kept": 31,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "remuneration_and_honorarium_rules.md",
+      "sha256": "d854593ef0c5e11db36d3c10de34bbcd459c2afaee063b1be6214a7e425ddf44",
+      "size_bytes": 1140,
+      "pages_with_text": 3,
+      "chunks": 3,
+      "extraction": {
+        "lines_raw": 40,
+        "lines_kept": 19,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "research_publications_2024.md",
+      "sha256": "4075ae30731d02cb1d820a3d73413d34dd21a88ef931dd93e34902277efdfe58",
+      "size_bytes": 28710,
+      "pages_with_text": 23,
+      "chunks": 23,
+      "extraction": {
+        "lines_raw": 116,
+        "lines_kept": 100,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "research_publications_overview.md",
+      "sha256": "801cf80129b49ff372a4b6e58571ea8179ddd43a411887a39504c9a85257d19a",
+      "size_bytes": 62421,
+      "pages_with_text": 50,
+      "chunks": 50,
+      "extraction": {
+        "lines_raw": 152,
+        "lines_kept": 137,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "student_testimonials.md",
+      "sha256": "0d5d524f9a2376685ac327ad7b1dc1b229417982e7bad735f26f03303776daea",
+      "size_bytes": 7010,
+      "pages_with_text": 6,
+      "chunks": 6,
+      "extraction": {
+        "lines_raw": 27,
+        "lines_kept": 14,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "technology_business_incubator_tbie.md",
+      "sha256": "2fb0d777b82a22848272742390b75a7b06f90ca47bedd7c92eff4f514ce65aa6",
+      "size_bytes": 1311,
+      "pages_with_text": 1,
+      "chunks": 1,
+      "extraction": {
+        "lines_raw": 38,
+        "lines_kept": 15,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "training_and_placement_cell.md",
+      "sha256": "6c28234cc4a40705dda78f106b3c27916277b8221ca2231c6269faf85d99411e",
+      "size_bytes": 4137,
+      "pages_with_text": 5,
+      "chunks": 5,
+      "extraction": {
+        "lines_raw": 60,
+        "lines_kept": 26,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "ugc_recognition_letter.md",
+      "sha256": "8a3b8bf723919e969df529f6c4072caefc5655452b1b2eedb3dc17fe56564131",
+      "size_bytes": 3320,
+      "pages_with_text": 4,
+      "chunks": 4,
+      "extraction": {
+        "lines_raw": 71,
+        "lines_kept": 56,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "vocational_training_programme.md",
+      "sha256": "e85236dcf520bbd75a6b7a65b2a8c9037cd59ec77dd7d0ae1e77bb012539fe68",
+      "size_bytes": 7001,
+      "pages_with_text": 7,
+      "chunks": 7,
+      "extraction": {
+        "lines_raw": 57,
+        "lines_kept": 34,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
+      }
+    },
+    {
+      "name": "why_choose_iiitnr.md",
+      "sha256": "c8d4c6baeb3416577c53c6b57e595c84675d806c18b77590a9e0c5e9f49e8064",
+      "size_bytes": 4502,
+      "pages_with_text": 7,
+      "chunks": 7,
+      "extraction": {
+        "lines_raw": 69,
+        "lines_kept": 42,
+        "dropped": {},
+        "pages_empty_after_cleaning": []
       }
     }
   ],
   "embedding": {
-    "model": "gemini-embedding-001",
+    "model": "gemini-embedding-2",
     "task_type": "RETRIEVAL_DOCUMENT",
     "dimension": 3072,
     "includes_heading_path": true
@@ -67,12 +1213,12 @@
     "max_pages_per_chunk": 3
   },
   "stats": {
-    "total_documents": 1,
-    "total_chunks": 218,
-    "total_pages": 78,
-    "max_pages_per_chunk": 4,
-    "avg_pages_per_chunk": 1.29,
-    "single_page_chunks": 165,
-    "avg_chars_per_chunk": 1099
+    "total_documents": 92,
+    "total_chunks": 2484,
+    "total_pages": 2484,
+    "max_pages_per_chunk": 1,
+    "avg_pages_per_chunk": 1.0,
+    "single_page_chunks": 2484,
+    "avg_chars_per_chunk": 829
   }
 }

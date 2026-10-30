@@ -876,10 +876,10 @@ def format_sources(
         source = "📄 "
         if many_documents and reference["document_label"]:
             source += f"{reference['document_label']} · "
-        source += f"Halaman {reference['page_label']}"
+        source += f"Page {reference['page_label']}"
         if reference["section_title"]:
             source += f" — *{reference['section_title']}*"
         if include_scores:
-            source += f" (relevansi: {reference['score']:.0%})"
+            source += f" (relevance: {reference['score']:.0%})"
         lines.append(source)
     return "\n".join(lines)

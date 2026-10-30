@@ -1,21 +1,15 @@
 """
-llm_client.py — Adapter provider untuk pipeline RAG.
+llm_client.py — Adapter provider Google Gemini untuk pipeline RAG.
 
-Pembagian provider jangka pendek:
+Seluruh pipeline kini memakai Google Gemini API:
+- **Chat, Rerank, Query Rewrite**: Google Gemini API via google.genai Client.
+- **Embedding**: Google Gemini API (gemini-embedding-001).
 
-- **OpenAI-compatible endpoint** (`LLM_BASE_URL`) untuk jawaban, reranker,
-  dan query rewriting. Default-nya `https://bandelbanget.xyz/v1`.
-- **Google Gemini** hanya untuk embedding, karena endpoint OpenAI-compatible
-  baru yang dipakai belum menyediakan `/embeddings`.
-
-API internal tetap sama agar modul lain tidak berubah:
-
+API internal tetap dipertahankan:
 - `call_llm()`
 - `call_utility_llm()`
 - `embed_texts()`
 - `get_query_embedding()`
-
-Dengan begitu perpindahan provider tidak merusak retrieval, evaluasi, atau UI.
 """
 
 from __future__ import annotations
@@ -24,11 +18,12 @@ import json
 import os
 import time
 from functools import lru_cache
-from typing import Any
+from typing import Any, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from google import genai
+from google.genai import types
 
 from app.config import (
     ANSWER_MAX_TOKENS,
@@ -39,6 +34,7 @@ from app.config import (
     EMBEDDING_MODEL,
     LLM_BASE_URL,
     LLM_MODEL,
+    LLM_PROVIDER,
     MODEL_FALLBACKS,
     PROJECT_ROOT,
     TASK_TYPE_DOCUMENT,
@@ -55,8 +51,6 @@ _PLACEHOLDER_KEYS = {
     "your_api_key_here",
 }
 
-# Provider OpenAI-compatible mengembalikan error model/kuota per model.
-# Karena itu model cadangan boleh dicoba untuk 404, 429, dan 503.
 _MODEL_UNAVAILABLE_MARKERS = (
     "404", "NOT_FOUND",
     "MODEL_DISABLED",
@@ -64,20 +58,11 @@ _MODEL_UNAVAILABLE_MARKERS = (
     "500", "502", "503", "504", "UNAVAILABLE",
 )
 
-# Ingatan proses: setelah `auto` terbukti bekerja, request berikutnya tidak
-# perlu menguji model mati yang sama terlebih dahulu.
 _WORKING_MODEL: dict[str, str] = {}
-
-# Cache query embedding tetap memakai key task type agar embedding dokumen dan
-# query tidak pernah tertukar.
 _QUERY_EMBEDDING_CACHE: dict[tuple[str, str | None], list[float]] = {}
 _QUERY_EMBEDDING_CACHE_LIMIT = 512
 
-# Endpoint baru bisa membutuhkan waktu lebih lama saat gateway memilih model.
 HTTP_TIMEOUT_SECONDS = 120
-
-# Alias kompatibilitas: modul lama mengimpor konstanta ini dari llm_client.
-# Sumber aslinya sekarang app.config.
 
 
 class LLMConfigError(RuntimeError):
@@ -97,13 +82,6 @@ def _valid_key(value: Any) -> bool:
 
 
 def _looks_like_gateway_key(value: str | None) -> bool:
-    """
-    Heuristik untuk mencegah key Bandel dipakai ke Gemini embedding.
-
-    Key gateway yang terlihat pada konfigurasi user berbentuk `sk-…`,
-    sedangkan key Google AI Studio umumnya berbentuk `AIza…`. Ini bukan
-    validasi autentikasi — hanya pencegah salah provider sebelum request.
-    """
     return bool(value and str(value).strip().lower().startswith(("sk-", "sk_")))
 
 
@@ -142,96 +120,76 @@ def _read_streamlit_secret(*names: str) -> str | None:
 
 def resolve_llm_api_key(explicit_key: str | None = None) -> str:
     """
-    Cari key untuk endpoint OpenAI-compatible.
+    Cari key untuk provider LLM.
 
     Prioritas:
-
     1. argumen eksplisit
     2. `LLM_API_KEY`, `BANDEL_API_KEY`, `OPENAI_API_KEY`
-    3. key dengan nama sama di secrets.toml
-    4. `GEMINI_API_KEY` lama sebagai fallback transisi
-
-    Fallback terakhir membantu instalasi lama tetap hidup, tetapi konfigurasi
-    yang dianjurkan adalah `LLM_API_KEY` agar jelas key itu bukan key Google.
+    3. `GEMINI_API_KEY`, `GOOGLE_API_KEY`
+    4. secrets.toml
     """
     candidates: list[str | None] = [explicit_key]
-    for env_name in ("LLM_API_KEY", "BANDEL_API_KEY", "OPENAI_API_KEY"):
+    for env_name in (
+        "LLM_API_KEY",
+        "BANDEL_API_KEY",
+        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+    ):
         candidates.append(os.environ.get(env_name))
-    candidates.append(_read_secrets_file("LLM_API_KEY", "BANDEL_API_KEY", "OPENAI_API_KEY"))
-    candidates.append(_read_streamlit_secret("LLM_API_KEY", "BANDEL_API_KEY", "OPENAI_API_KEY"))
 
-    # Transisi: sebelumnya project hanya punya GEMINI_API_KEY. Ini boleh
-    # dipakai untuk chat bila base URL-nya sudah diarahkan ke provider baru.
-    candidates.append(os.environ.get("GEMINI_API_KEY"))
-    candidates.append(_read_secrets_file("GEMINI_API_KEY"))
-    candidates.append(_read_streamlit_secret("GEMINI_API_KEY"))
+    candidates.append(_read_secrets_file(
+        "LLM_API_KEY", "BANDEL_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"
+    ))
+    candidates.append(_read_streamlit_secret(
+        "LLM_API_KEY", "BANDEL_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"
+    ))
 
     for candidate in candidates:
         if _valid_key(candidate):
             return str(candidate).strip()
 
     raise LLMConfigError(
-        "API key provider chat belum diatur. Isi salah satu:\n"
-        "  1. LLM_API_KEY di .streamlit/secrets.toml\n"
-        "  2. environment variable LLM_API_KEY\n"
+        "API key provider belum diatur. Isi salah satu:\n"
+        "  1. GEMINI_API_KEY atau LLM_API_KEY di .streamlit/secrets.toml\n"
+        "  2. environment variable GEMINI_API_KEY atau LLM_API_KEY\n"
         "  3. flag --api-key YOUR_KEY"
     )
 
 
 def resolve_api_key(explicit_key: str | None = None) -> str:
     """
-    Alias kompatibilitas untuk kode lama.
-
-    Sebelumnya semua provider memakai nama `resolve_api_key`. Sekarang chat
-    dan embedding dipisah, tetapi pemanggil lama tetap diarahkan ke resolver
-    key chat agar tidak pecah saat migrasi.
+    Alias kompatibilitas untuk kode yang membaca API key.
     """
     return resolve_llm_api_key(explicit_key)
 
 
 def resolve_embedding_api_key(explicit_key: str | None = None) -> str:
-    """
-    Cari key Google untuk embedding.
-
-    Konfigurasi yang dianjurkan:
-
-        GEMINI_EMBEDDING_API_KEY = "key_google"
-
-    `GEMINI_API_KEY` tetap diterima sebagai kompatibilitas instalasi lama,
-    tetapi key Bandel tidak boleh ditempatkan di sana bila embedding Gemini
-    masih digunakan.
-    """
+    """Cari key Google untuk embedding."""
     candidates: list[str | None] = [explicit_key]
     for env_name in (
         "GEMINI_EMBEDDING_API_KEY",
+        "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "EMBEDDING_API_KEY",
+        "LLM_API_KEY",
     ):
         candidates.append(os.environ.get(env_name))
 
     candidates.append(_read_secrets_file(
         "GEMINI_EMBEDDING_API_KEY",
+        "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "EMBEDDING_API_KEY",
+        "LLM_API_KEY",
     ))
     candidates.append(_read_streamlit_secret(
         "GEMINI_EMBEDDING_API_KEY",
+        "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "EMBEDDING_API_KEY",
+        "LLM_API_KEY",
     ))
-
-    # Kompatibilitas dengan instalasi lama yang menyimpan key Google di
-    # GEMINI_API_KEY. Key gateway `sk-…` sengaja dilewati agar error-nya tidak
-    # baru muncul sebagai 401 jauh di dalam request embedding.
-    legacy_candidates = [
-        os.environ.get("GEMINI_API_KEY"),
-        _read_secrets_file("GEMINI_API_KEY"),
-        _read_streamlit_secret("GEMINI_API_KEY"),
-    ]
-    candidates.extend(
-        value for value in legacy_candidates
-        if not _looks_like_gateway_key(value)
-    )
 
     for candidate in candidates:
         if _valid_key(candidate):
@@ -239,8 +197,7 @@ def resolve_embedding_api_key(explicit_key: str | None = None) -> str:
 
     raise LLMConfigError(
         "API key Gemini embedding belum diatur. Isi "
-        "GEMINI_EMBEDDING_API_KEY dengan key Google AI Studio. "
-        "Key Bandel tidak bisa dipakai untuk embedding Gemini."
+        "GEMINI_API_KEY atau GOOGLE_API_KEY dengan key Google AI Studio."
     )
 
 
@@ -264,12 +221,18 @@ def resolve_llm_base_url(explicit_url: str | None = None) -> str:
 
 @lru_cache(maxsize=4)
 def get_client(api_key: str | None = None) -> genai.Client:
-    """Gemini client yang di-cache khusus untuk embedding."""
-    return genai.Client(api_key=resolve_embedding_api_key(api_key))
+    """Gemini client yang di-cache khusus untuk Gemini API."""
+    key = api_key
+    if not key:
+        try:
+            key = resolve_embedding_api_key()
+        except LLMConfigError:
+            key = resolve_api_key()
+    return genai.Client(api_key=key)
 
 
 # ──────────────────────────────────────────────
-# OpenAI-compatible chat
+# Chat & Generation
 # ──────────────────────────────────────────────
 
 def _is_model_unavailable(error: Exception) -> bool:
@@ -297,8 +260,6 @@ def reset_model_cache() -> None:
 
 
 def _openai_error(status: int | None, body: str) -> LLMCallError:
-    # Body provider boleh panjang dan kadang memuat detail internal. Tetap
-    # simpan kode + cuplikan agar UI tidak dipenuhi dump respons mentah.
     compact = " ".join(body.split())[:700]
     return LLMCallError(f"{status or 'HTTP'} {compact}")
 
@@ -309,7 +270,7 @@ def _post_json(
     api_key: str,
     base_url: str,
 ) -> dict:
-    """POST JSON dengan stdlib, tanpa dependency SDK tambahan."""
+    """POST JSON dengan stdlib, untuk kompatibilitas endpoint OpenAI-compatible."""
     request = Request(
         f"{base_url}/{path.lstrip('/')}",
         data=json.dumps(payload).encode("utf-8"),
@@ -353,7 +314,6 @@ def _extract_chat_text(data: dict) -> str:
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
-        # OpenAI-compatible multimodal format kadang mengembalikan list part.
         return "".join(
             str(part.get("text", "")) if isinstance(part, dict) else str(part)
             for part in content
@@ -361,7 +321,47 @@ def _extract_chat_text(data: dict) -> str:
     return str(content).strip() if content else ""
 
 
-def _generate_once(
+def _generate_once_gemini(
+    prompt: str,
+    system_instruction: str,
+    temperature: float,
+    max_tokens: int,
+    model: str,
+    api_key: str | None,
+    response_mime_type: str | None = None,
+) -> str:
+    """Panggilan generasi ke Google Gemini API via google.genai Client."""
+    client = get_client(api_key)
+
+    config_kwargs: dict[str, Any] = {
+        "temperature": temperature,
+        "max_output_tokens": max_tokens,
+    }
+    if system_instruction:
+        config_kwargs["system_instruction"] = system_instruction
+    if response_mime_type:
+        config_kwargs["response_mime_type"] = response_mime_type
+
+    if "2.5" in model and (temperature == 0.0 or max_tokens < 1000):
+        try:
+            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            pass
+
+    cfg = types.GenerateContentConfig(**config_kwargs)
+
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=cfg,
+        )
+        return (response.text or "").strip()
+    except Exception as error:
+        raise LLMCallError(f"Google Gemini call failed: {error}") from error
+
+
+def _generate_once_openai(
     prompt: str,
     system_instruction: str,
     temperature: float,
@@ -389,6 +389,43 @@ def _generate_once(
         payload["response_format"] = {"type": "json_object"}
 
     return _extract_chat_text(_post_json("chat/completions", payload, key, base_url))
+
+
+def _generate_once(
+    prompt: str,
+    system_instruction: str,
+    temperature: float,
+    max_tokens: int,
+    model: str,
+    api_key: str | None,
+    response_mime_type: str | None = None,
+) -> str:
+    from app.config import LLM_PROVIDER
+    # Jalur OpenAI-compatible untuk backward compatibility dan unit testing
+    if (
+        LLM_PROVIDER == "openai_compatible"
+        or model in ("auto", "deepseek-v4-flash", "glm-5.3-flash")
+        or model.startswith(("deepseek", "glm", "gpt", "claude"))
+    ):
+        return _generate_once_openai(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            model=model,
+            api_key=api_key,
+            response_mime_type=response_mime_type,
+        )
+
+    return _generate_once_gemini(
+        prompt=prompt,
+        system_instruction=system_instruction,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        model=model,
+        api_key=api_key,
+        response_mime_type=response_mime_type,
+    )
 
 
 def _generate(
@@ -440,7 +477,7 @@ def call_llm(
     api_key: str | None = None,
     raise_on_error: bool = False,
 ) -> str:
-    """Panggil provider chat untuk jawaban akhir."""
+    """Panggil provider Gemini untuk jawaban akhir."""
     if raise_on_error:
         return _generate(
             prompt, system_instruction, temperature, max_tokens, model, api_key
@@ -450,17 +487,84 @@ def call_llm(
         text = _generate(
             prompt, system_instruction, temperature, max_tokens, model, api_key
         )
-        return text or "Maaf, saya tidak dapat menghasilkan jawaban untuk pertanyaan ini."
+        return text or "I apologize, but I could not generate an answer for this question."
     except LLMConfigError as error:
         return f"⚠️ {error}"
     except Exception as error:
         message = str(error)
         lowered = message.lower()
         if "quota" in lowered or "rate" in lowered or "429" in message:
-            return "⚠️ Batas penggunaan API tercapai. Silakan coba lagi dalam beberapa menit."
+            return "⚠️ API rate limit or quota exceeded (HTTP 429). Please wait a moment and try again."
         if any(token in lowered for token in ("api key", "api_key", "authentication", "401")):
-            return "⚠️ API key provider tidak valid. Periksa konfigurasi secrets."
-        return f"⚠️ Terjadi kesalahan saat memproses: {message[:500]}"
+            return "⚠️ Invalid API key. Please check secrets configuration."
+        return f"⚠️ Error processing request: {message[:500]}"
+
+
+def call_llm_stream(
+    prompt: str,
+    system_instruction: str = "",
+    temperature: float = ANSWER_TEMPERATURE,
+    max_tokens: int = ANSWER_MAX_TOKENS,
+    model: str = LLM_MODEL,
+    api_key: str | None = None,
+) -> Iterator[str]:
+    """Stream answer tokens from Gemini, with fallback to standard generation if needed."""
+    from app.config import LLM_PROVIDER
+    if (
+        LLM_PROVIDER == "openai_compatible"
+        or model in ("auto", "deepseek-v4-flash", "glm-5.3-flash")
+        or model.startswith(("deepseek", "glm", "gpt", "claude"))
+    ):
+        full_text = call_llm(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            model=model,
+            api_key=api_key,
+        )
+        yield full_text
+        return
+
+    try:
+        client = get_client(api_key)
+        config_kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
+
+        if "2.5" in model and (temperature == 0.0 or max_tokens < 1000):
+            try:
+                config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
+
+        cfg = types.GenerateContentConfig(**config_kwargs)
+
+        stream = client.models.generate_content_stream(
+            model=model,
+            contents=prompt,
+            config=cfg,
+        )
+        has_content = False
+        for chunk in stream:
+            if chunk.text:
+                has_content = True
+                yield chunk.text
+
+        if not has_content:
+            yield "I apologize, but I could not generate an answer for this question."
+    except Exception as error:
+        yield call_llm(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            model=model,
+            api_key=api_key,
+        )
 
 
 def call_utility_llm(
@@ -470,7 +574,7 @@ def call_utility_llm(
     api_key: str | None = None,
     json_mode: bool = False,
 ) -> str:
-    """Panggil provider chat untuk reranker/query rewriting."""
+    """Panggil provider Gemini untuk reranker/query rewriting."""
     return _generate(
         prompt=prompt,
         system_instruction=system_instruction,
@@ -483,14 +587,7 @@ def call_utility_llm(
 
 
 def test_connection(api_key: str | None = None) -> bool:
-    """
-    Tes koneksi DAN kepatuhan provider terhadap prompt.
-
-    HTTP 200 saja tidak cukup. Endpoint Bandel yang diuji mengembalikan 200
-    tetapi mengabaikan prompt dan mengirim kalimat motivasi tetap. Probe unik
-    ini memastikan model benar-benar membaca instruksi sebelum UI/operator
-    menganggap provider siap.
-    """
+    """Tes koneksi DAN kepatuhan model terhadap prompt."""
     probe = "LLM_HEALTH_PROBE_7F3C"
     try:
         answer = call_utility_llm(
@@ -507,6 +604,25 @@ def test_connection(api_key: str | None = None) -> bool:
 # Gemini embedding API
 # ──────────────────────────────────────────────
 
+def _parse_retry_delay(error: Exception) -> float:
+    """Extract retry delay in seconds from Gemini API error response."""
+    import re
+    msg = str(error)
+    m = re.search(r"retry\s+in\s+([0-9.]+)\s*s", msg, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1)) + 2.0
+        except ValueError:
+            pass
+    m = re.search(r"['\"]retryDelay['\"]\s*:\s*['\"]([0-9]+)s?['\"]", msg)
+    if m:
+        try:
+            return float(m.group(1)) + 2.0
+        except ValueError:
+            pass
+    return 35.0
+
+
 def embed_texts(
     texts: list[str],
     task_type: str | None = TASK_TYPE_DOCUMENT,
@@ -516,14 +632,13 @@ def embed_texts(
     max_retries: int = EMBED_MAX_RETRIES,
     progress: bool = False,
 ) -> list[list[float]]:
-    """Embed teks memakai Gemini khusus embedding."""
+    """Embed texts using Google Gemini Embedding model."""
     if not texts:
         return []
 
     client = get_client(api_key)
-    from google.genai import types as genai_types
 
-    config = genai_types.EmbedContentConfig(task_type=task_type) if task_type else None
+    config = types.EmbedContentConfig(task_type=task_type) if task_type else None
     all_embeddings: list[list[float]] = []
     total_batches = (len(texts) - 1) // batch_size + 1
 
@@ -531,14 +646,18 @@ def embed_texts(
         batch = texts[i:i + batch_size]
         batch_num = i // batch_size + 1
         if progress:
-            print(f"   Embedding batch {batch_num}/{total_batches} ({len(batch)} teks)...")
+            print(f"   Embedding batch {batch_num}/{total_batches} ({len(batch)} items)...", flush=True)
 
         last_error: Exception | None = None
         for attempt in range(max_retries):
             try:
+                contents = [
+                    types.Content(parts=[types.Part.from_text(text=t)])
+                    for t in batch
+                ]
                 result = client.models.embed_content(
                     model=EMBEDDING_MODEL,
-                    contents=batch,
+                    contents=contents,
                     config=config,
                 )
                 all_embeddings.extend(e.values for e in result.embeddings)
@@ -550,15 +669,15 @@ def embed_texts(
                 rate_limited = "429" in message or "RESOURCE_EXHAUSTED" in message
                 if not rate_limited or attempt == max_retries - 1:
                     break
-                wait = batch_delay * (2 ** attempt)
+                wait = _parse_retry_delay(error)
                 if progress:
-                    print(f"   >> Rate limit, menunggu {wait:.0f}s "
-                          f"(percobaan {attempt + 1}/{max_retries})...")
+                    print(f"   >> Rate limit encountered, waiting {wait:.1f}s "
+                          f"(attempt {attempt + 1}/{max_retries})...", flush=True)
                 time.sleep(wait)
 
         if last_error is not None:
             raise LLMCallError(
-                f"Gagal embed batch {batch_num}/{total_batches}: {last_error}"
+                f"Failed to embed batch {batch_num}/{total_batches}: {last_error}"
             ) from last_error
 
         if batch_num < total_batches and batch_delay > 0:

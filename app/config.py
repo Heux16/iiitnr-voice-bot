@@ -1,15 +1,9 @@
 """
 config.py — Konfigurasi terpusat seluruh pipeline RAG.
 
-Konfigurasi provider dipisahkan dengan sengaja:
-
-- **LLM provider** memakai endpoint OpenAI-compatible milik Bandel AI untuk
-  jawaban, reranker, dan query rewriting.
-- **Embedding provider** tetap memakai Gemini hanya untuk embedding karena
-  endpoint Bandel yang tersedia tidak menyediakan `/embeddings`.
-
-Jangan memakai key Bandel sebagai key Gemini embedding. Keduanya memiliki
-format, endpoint, dan hak akses yang berbeda.
+Pipeline ini sepenuhnya menggunakan Google Gemini API:
+- **LLM provider**: Google Gemini untuk jawaban, reranker, dan query rewriting.
+- **Embedding provider**: Google Gemini (gemini-embedding-001) untuk dense retrieval.
 """
 
 from __future__ import annotations
@@ -54,28 +48,25 @@ def _read_model_setting(name: str, default: str) -> str:
     value = secrets.get(name)
     return str(value).strip() if value and str(value).strip() else default
 
-#: Provider chat OpenAI-compatible. Base URL dapat dioverride lewat
-#: `LLM_BASE_URL` atau `OPENAI_BASE_URL` di environment/secrets.
-LLM_BASE_URL = "https://bandelbanget.xyz/v1"
-LLM_PROVIDER = "openai_compatible"
+#: Base URL untuk provider opsional OpenAI-compatible bila diaktifkan.
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://bandelbanget.xyz/v1")
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "gemini")
 
-#: Pilih model eksplisit yang sudah diuji. Alias `auto` saat ini dapat
-#: diarahkan ke model yang dinonaktifkan/stok habis oleh gateway.
-LLM_MODEL = _read_model_setting("LLM_MODEL", "deepseek-v4-flash")
-UTILITY_MODEL = _read_model_setting("UTILITY_MODEL", "deepseek-v4-flash")
+#: Model Google Gemini untuk jawaban dan utility (reranker & rewrite).
+LLM_MODEL = _read_model_setting("LLM_MODEL", "gemini-3.5-flash-lite")
+UTILITY_MODEL = _read_model_setting("UTILITY_MODEL", "gemini-3.5-flash-lite")
 MODEL_FALLBACKS: dict[str, tuple[str, ...]] = {
     "auto": ("deepseek-v4-flash", "glm-5.3-flash"),
-    "deepseek-v4-flash": ("glm-5.3-flash",),
-    "glm-5.3-flash": ("deepseek-v4-flash",),
-    # Keep old explicit settings recoverable when a listed model is disabled.
-    "gpt-5.6": ("deepseek-v4-flash", "glm-5.3-flash"),
-    "claude-sonnet-5": ("deepseek-v4-flash", "glm-5.3-flash"),
+    "gemini-3.5-flash-lite": ("gemini-3.5-flash", "gemini-2.5-flash"),
+    "gemini-3.5-flash": ("gemini-3.5-flash-lite", "gemini-2.5-flash"),
+    "gemini-2.5-flash": ("gemini-3.5-flash-lite", "gemini-3.5-flash"),
+    "deepseek-v4-flash": ("glm-5.3-flash", "gemini-3.5-flash-lite"),
+    "glm-5.3-flash": ("deepseek-v4-flash", "gemini-3.5-flash-lite"),
 }
 
-#: Embedding tetap Gemini karena endpoint Bandel yang diuji tidak menyediakan
-#: `/embeddings`. Jangan ubah tanpa membangun ulang FAISS index.
+#: Embedding Google Gemini.
 EMBEDDING_PROVIDER = "gemini"
-EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_MODEL = _read_model_setting("EMBEDDING_MODEL", "gemini-embedding-2")
 
 #: Task type embedding. Index dan query harus memakai ruang embedding yang
 #: sama.
@@ -163,6 +154,6 @@ ABLATION_PRESETS: dict[str, RetrievalConfig] = {
 # Ingestion
 # ──────────────────────────────────────────────
 
-EMBED_BATCH_SIZE = 10
-EMBED_BATCH_DELAY = 2.0
-EMBED_MAX_RETRIES = 5
+EMBED_BATCH_SIZE = 40
+EMBED_BATCH_DELAY = 25.0
+EMBED_MAX_RETRIES = 8

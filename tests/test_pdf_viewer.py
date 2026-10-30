@@ -1,8 +1,26 @@
-"""Test path safety and source references for the embedded PDF viewer."""
+"""Test path safety and source references for the embedded document/PDF viewer."""
 
 from pathlib import Path
+import pymupdf
+import pytest
 
 from app import pdf_viewer
+
+
+@pytest.fixture(autouse=True)
+def setup_test_pdf(tmp_path, monkeypatch):
+    """Set up a test PDF file in a mock DATA_DIR so tests don't require external files."""
+    test_pdf_name = "test_document.pdf"
+    pdf_path = tmp_path / test_pdf_name
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((50, 50), "Test Document Content")
+    doc.save(str(pdf_path))
+    doc.close()
+
+    monkeypatch.setattr(pdf_viewer, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(pdf_viewer, "DEFAULT_PDF_NAME", test_pdf_name)
+    return pdf_path
 
 
 class TestSafePdfPath:
@@ -30,10 +48,10 @@ class TestSafePdfPath:
     def test_halaman_dirender_menjadi_png(self):
         data = pdf_viewer._pdf_page_image(
             str(pdf_viewer.DATA_DIR / pdf_viewer.DEFAULT_PDF_NAME),
-            39,
+            1,
         )
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
-        assert len(data) > 10_000
+        assert len(data) > 1_000
 
     def test_key_referensi_stabil(self):
         first = {

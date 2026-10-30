@@ -1,25 +1,23 @@
 """
-reranker.py — Reranking kandidat retrieval memakai LLM sebagai cross-encoder.
+reranker.py — Rerank retrieval candidates using LLM as a cross-encoder.
 
-Kenapa perlu reranking?
-    Dense retrieval dan BM25 sama-sama menilai query dan dokumen secara
-    terpisah (bi-encoder / bag-of-words), jadi keduanya menilai *kemiripan*
-    bukan *kemampuan menjawab*. Sebuah chunk bisa sangat mirip topiknya tapi
-    tidak memuat jawabannya. Reranker melihat query dan chunk bersamaan,
-    sehingga jauh lebih tepat memutuskan mana yang benar-benar menjawab.
+Why reranking?
+    Dense retrieval and BM25 assess queries and documents separately
+    (bi-encoder / bag-of-words), scoring *similarity* rather than *answerability*.
+    A chunk may share topical keywords without containing the answer.
+    A reranker evaluates the query and chunk together, determining whether the chunk
+    actually answers the user's question.
 
-Kenapa LLM, bukan cross-encoder lokal?
-    Cross-encoder multilingual (mis. varian mMiniLM) berukuran ratusan MB dan
-    menarik dependency PyTorch — bertabrakan dengan tujuan proyek ini yang
-    ringan dan CPU-only. Satu panggilan `gemini-2.5-flash-lite` menilai
-    seluruh kandidat sekaligus dengan latensi ratusan milidetik.
+Why LLM instead of local cross-encoder?
+    Multilingual cross-encoders are hundreds of megabytes and require PyTorch.
+    A single call to Gemini Flash evaluates all candidates simultaneously
+    with sub-second latency on CPU.
 
-Pendekatannya *listwise*: semua kandidat dikirim dalam satu panggilan, model
-memberi skor 0–10 per kandidat. Ini lebih murah daripada pointwise (satu
-panggilan per kandidat) dan memberi model konteks pembanding.
+The approach is *listwise*: all candidates are sent in one prompt, and the model
+scores each 0–10.
 
-Reranker didesain **fail-safe**: kegagalan apa pun (error API, JSON rusak)
-mengembalikan urutan hasil fusi apa adanya, jadi chatbot tetap menjawab.
+The reranker is **fail-safe**: any failure preserves fusion order so the chatbot
+continues answering.
 """
 
 from __future__ import annotations
@@ -30,59 +28,58 @@ import time
 
 from app.llm_client import call_utility_llm
 
-#: Batas karakter tiap kandidat yang dikirim ke reranker. Cukup untuk menilai
-#: relevansi tanpa membengkakkan prompt.
+#: Character limit for each candidate snippet sent to reranker.
 SNIPPET_CHAR_LIMIT = 900
 
-RERANK_SYSTEM_PROMPT = """Kamu adalah komponen pemeringkat relevansi (reranker) pada sistem pencarian dokumen akademik.
+RERANK_SYSTEM_PROMPT = """You are a relevance ranking component (reranker) in an academic document search system.
 
-Tugasmu: menilai seberapa baik setiap potongan dokumen dapat MENJAWAB pertanyaan pengguna.
+Your task: evaluate how well each document excerpt ANSWERS the user's question.
 
-Panduan skor (0-10):
-- 9-10 : Memuat jawaban langsung dan lengkap atas pertanyaan.
-- 6-8  : Memuat sebagian jawaban atau informasi pendukung yang jelas relevan.
-- 3-5  : Topiknya berkaitan, tetapi tidak menjawab pertanyaan.
-- 0-2  : Tidak relevan, hanya berbagi kata umum dengan pertanyaan.
+Scoring guidelines (0-10):
+- 9-10 : Contains a direct and complete answer to the question.
+- 6-8  : Contains partial answers or clearly relevant supporting information.
+- 3-5  : Related topic, but does not directly answer the question.
+- 0-2  : Irrelevant, only shares generic keywords with the question.
 
-Aturan penting:
-- Nilai kemampuan MENJAWAB, bukan kemiripan kata. Potongan yang memuat kata yang sama tetapi membahas hal lain harus diberi skor rendah.
-- Jika pertanyaan sama sekali di luar cakupan dokumen akademik kampus, beri skor 0-2 pada SEMUA potongan.
-- Jangan mengarang. Nilai hanya berdasarkan teks yang diberikan.
+Important rules:
+- Evaluate the ability to ANSWER the question, not mere lexical similarity. Excerpts that share keywords but discuss a different topic must receive low scores.
+- If the question is completely outside the scope of academic documents, give a score of 0-2 to ALL excerpts.
+- Do not fabricate information. Evaluate solely based on the provided text.
 
-Balas HANYA dengan JSON array, tanpa penjelasan:
+Respond ONLY with a JSON array, without explanation or markdown wrap:
 [{"id": 1, "score": 8}, {"id": 2, "score": 3}]"""
 
 
 def build_rerank_prompt(query: str, snippets: list[str]) -> str:
-    """Susun prompt listwise untuk reranker."""
-    parts = [f"PERTANYAAN PENGGUNA:\n{query}\n", "POTONGAN DOKUMEN:"]
+    """Build listwise prompt for the reranker."""
+    parts = [f"USER QUESTION:\n{query}\n", "DOCUMENT EXCERPTS:"]
     for i, snippet in enumerate(snippets, start=1):
         parts.append(f"\n[{i}]\n{snippet}")
     parts.append(
-        f"\nBeri skor relevansi 0-10 untuk setiap potongan [1]-[{len(snippets)}]. "
-        "Balas hanya JSON array."
+        f"\nGive a relevance score 0-10 for each excerpt [1]-[{len(snippets)}]. "
+        "Reply only with a JSON array."
     )
     return "\n".join(parts)
 
 
 def _snippet_for(candidate) -> str:
-    """Cuplikan kandidat, diawali heading agar model tahu konteks bagiannya."""
+    """Candidate snippet, prefixed by heading for section context."""
     heading = candidate.heading_label
     text = candidate.text.strip()
     if len(text) > SNIPPET_CHAR_LIMIT:
         text = text[:SNIPPET_CHAR_LIMIT].rsplit(" ", 1)[0] + " …"
-    return f"(Halaman {candidate.page_label} — {heading})\n{text}" if heading else text
+    return f"(Page {candidate.page_label} — {heading})\n{text}" if heading else text
 
 
 def parse_rerank_response(raw: str, expected: int) -> dict[int, float]:
     """
-    Ubah balasan model menjadi peta ``id kandidat (1-based) → skor``.
+    Convert model response into a map of ``candidate id (1-based) → score``.
 
-    Toleran terhadap output yang dibungkus code fence atau diberi teks
-    tambahan. ID di luar rentang dan skor non-numerik diabaikan.
+    Tolerant to responses wrapped in code fences or extra text.
+    IDs out of range and non-numeric scores are ignored.
 
     Returns:
-        Peta id → skor. Kosong jika tidak ada yang bisa diurai.
+        Dict of id → score. Empty if parsing fails.
     """
     if not raw:
         return {}
@@ -103,7 +100,6 @@ def parse_rerank_response(raw: str, expected: int) -> dict[int, float]:
                 return {}
 
     if isinstance(data, dict):
-        # Beberapa model membungkus array dalam sebuah objek.
         for value in data.values():
             if isinstance(value, list):
                 data = value
@@ -127,14 +123,13 @@ def parse_rerank_response(raw: str, expected: int) -> dict[int, float]:
     return scores
 
 
-#: Percobaan ulang untuk galat sesaat. Reranker adalah gate presisi utama,
-#: jadi menyerah pada percobaan pertama terlalu mahal harganya.
+#: Retries for transient errors.
 _MAX_ATTEMPTS = 3
 _TRANSIENT_MARKERS = ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500")
 
 
 def _call_reranker(prompt: str, api_key: str | None) -> str | None:
-    """Panggil model reranker, ulangi bila galatnya bersifat sesaat."""
+    """Call reranker model, retrying transient errors."""
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             return call_utility_llm(
@@ -159,24 +154,16 @@ def rerank_candidates(
     api_key: str | None = None,
 ) -> tuple[list, bool]:
     """
-    Nilai ulang dan urutkan kandidat berdasarkan kemampuannya menjawab query.
-
-    Mengembalikan status keberhasilan, bukan hanya daftarnya. Alasannya
-    penting: reranker adalah satu-satunya tahap yang mampu menolak pertanyaan
-    di luar cakupan pada index ini. Bila kegagalannya tidak dilaporkan,
-    pemanggil tidak bisa membedakan "semua kandidat dinilai tidak relevan"
-    dari "penilaian tidak pernah terjadi" — dan pertahanan anti-halusinasi
-    lenyap tanpa jejak saat API sedang sibuk.
+    Re-score and re-order candidates based on ability to answer the query.
 
     Args:
-        query: Pertanyaan (sudah melalui rewriting jika aktif).
-        candidates: Daftar `RetrievalCandidate` hasil fusi.
-        api_key: Override API key Gemini.
+        query: User question.
+        candidates: List of fusion `RetrievalCandidate` objects.
+        api_key: Optional Gemini API key override.
 
     Returns:
-        Tuple ``(kandidat, berhasil)``. Bila ``berhasil`` bernilai ``False``,
-        urutan fusi dipertahankan apa adanya dan ``rerank_score`` tetap
-        ``None`` agar chatbot tetap bisa menjawab.
+        Tuple ``(candidates, success)``. If ``success`` is ``False``, fusion
+        order is preserved as is.
     """
     if len(candidates) <= 1:
         return candidates, True
@@ -190,9 +177,6 @@ def rerank_candidates(
     if not scores:
         return candidates, False
 
-    # Model berhasil menilai, jadi kandidat yang TIDAK disebutkan dianggap
-    # sengaja diabaikan dan diberi skor 0 — bukan dibiarkan tanpa skor.
-    # Membiarkannya ``None`` akan meloloskannya dari gate relevansi.
     for position, candidate in enumerate(candidates, start=1):
         candidate.rerank_score = scores.get(position, 0.0)
 

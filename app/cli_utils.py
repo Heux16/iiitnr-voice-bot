@@ -21,6 +21,6 @@ def enable_utf8_stdout() -> None:
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
             try:
-                reconfigure(encoding="utf-8", errors="replace")
+                reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
             except (ValueError, OSError):
                 pass

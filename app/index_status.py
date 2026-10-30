@@ -2,15 +2,10 @@
 index_status.py — Deteksi index yang sudah usang terhadap dokumen sumbernya.
 
 Masalah yang diselesaikan:
-    Index dibangun dari PDF pada satu titik waktu. Bila PDF-nya diperbarui —
-    misalnya pedoman akademik tahun ajaran baru — index lama tetap terpakai
-    tanpa keluhan apa pun. Chatbot lalu menjawab dengan penuh keyakinan dari
-    dokumen kedaluwarsa, lengkap dengan sitasi halaman yang tampak sah tetapi
-    merujuk terbitan yang salah. Itu kegagalan yang paling sulit disadari.
-
-`build_index.py` sudah mencatat hash SHA-256 setiap dokumen di
-`index/index_info.json`. Modul ini yang membacanya kembali dan
-membandingkannya dengan berkas yang ada sekarang.
+    Index dibangun dari dokumen (PDF/Markdown) pada satu titik waktu. Bila dokumen diperbarui,
+    index lama tetap terpakai tanpa keluhan apa pun.
+    Modul ini membaca catatan hash SHA-256 di `index_info.json` dan membandingkannya
+    dengan berkas yang ada di folder data saat ini.
 """
 
 from __future__ import annotations
@@ -60,24 +55,12 @@ class IndexFreshness:
     documents: list[DocumentStatus] = field(default_factory=list)
     untracked_documents: list[str] = field(default_factory=list)
 
-    #: Versi pipeline yang tercatat pada index, dan versi kode saat ini.
-    #: Index yang dibangun sebelum penomoran ini ada dianggap versi 0.
     indexed_pipeline_version: int = 0
     current_pipeline_version: int = INGESTION_PIPELINE_VERSION
 
     @property
     def pipeline_outdated(self) -> bool:
-        """
-        True bila index dibangun oleh logika pipeline yang lebih lama.
-
-        Ini menangkap kelas keusangan yang tidak terlihat dari hash dokumen:
-        PDF-nya tidak berubah, tetapi aturan ekstraksi atau chunking sudah
-        diperbaiki sehingga isi chunk yang dihasilkan berbeda.
-
-        Bernilai False bila catatan build tidak ada sama sekali. Keadaan itu
-        sudah dilaporkan lewat pesannya sendiri, dan menandainya usang di sini
-        hanya akan memunculkan dua keluhan untuk satu sebab yang sama.
-        """
+        """True bila index dibangun oleh logika pipeline yang lebih lama."""
         if not self.has_info:
             return False
         return self.indexed_pipeline_version < self.current_pipeline_version
@@ -92,15 +75,7 @@ class IndexFreshness:
 
     @property
     def is_stale(self) -> bool:
-        """
-        True bila index perlu dibangun ulang.
-
-        Dokumen yang hilang **tidak** membuat index usang: index-nya masih
-        sahih, hanya berkas sumbernya yang tidak lagi tersedia untuk diperiksa.
-        Yang membuat usang adalah isi dokumen yang berubah, dokumen baru yang
-        belum terindeks, atau logika pipeline yang sudah lebih maju daripada
-        saat index dibangun.
-        """
+        """True bila index perlu dibangun ulang."""
         return bool(self.changed or self.untracked_documents or self.pipeline_outdated)
 
     def messages(self) -> list[str]:
@@ -154,12 +129,7 @@ def load_index_info(path: str | Path = INDEX_INFO_PATH) -> dict:
 
 
 def indexed_documents(index_info: dict) -> list[dict]:
-    """
-    Ambil daftar dokumen sumber dari catatan build.
-
-    Menangani dua bentuk: ``source_documents`` (multi-dokumen) dan
-    ``source_pdf`` (dokumen tunggal, format lama).
-    """
+    """Ambil daftar dokumen sumber dari catatan build."""
     documents = index_info.get("source_documents")
     if isinstance(documents, list) and documents:
         return documents
@@ -177,14 +147,7 @@ def check_index_freshness(
 ) -> IndexFreshness:
     """
     Bandingkan hash dokumen yang tercatat di index dengan berkas saat ini.
-
-    Args:
-        index_info: Isi ``index_info.json``. Dibaca sendiri bila ``None``.
-        data_dir: Folder tempat dokumen sumber berada.
-
-    Returns:
-        `IndexFreshness` berisi dokumen yang berubah, hilang, dan yang belum
-        terindeks.
+    Mendukung berkas PDF dan Markdown.
     """
     if index_info is None:
         index_info = load_index_info()
@@ -205,6 +168,10 @@ def check_index_freshness(
         tercatat.add(name)
 
         path = data_dir / name
+        if not path.exists():
+            matches = list(data_dir.rglob(name))
+            if matches:
+                path = matches[0]
         status = DocumentStatus(
             name=name,
             indexed_sha256=entry.get("sha256", ""),
@@ -219,7 +186,12 @@ def check_index_freshness(
 
     if data_dir.exists():
         freshness.untracked_documents = sorted(
-            p.name for p in data_dir.glob("*.pdf") if p.name not in tercatat
+            p.name
+            for p in data_dir.rglob("*")
+            if p.is_file()
+            and p.suffix.lower() in (".pdf", ".md", ".markdown")
+            and p.name.lower() != "readme.md"
+            and p.name not in tercatat
         )
 
     return freshness

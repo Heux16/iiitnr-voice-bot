@@ -1,8 +1,8 @@
 """
-prompt_builder.py — Menyusun prompt untuk LLM.
+prompt_builder.py — Construct prompts for LLM.
 
-Menggabungkan system instruction, konteks dari retrieved chunks,
-dan pertanyaan pengguna menjadi prompt yang terstruktur.
+Combines system instructions, context from retrieved chunks,
+and user question into a structured prompt.
 """
 
 from app.retrieval import RetrievalResult
@@ -12,25 +12,25 @@ from app.retrieval import RetrievalResult
 # System Prompt
 # ──────────────────────────────────────────────
 
-SYSTEM_PROMPT = """Kamu adalah asisten chatbot resmi Universitas Atma Jaya Yogyakarta (UAJY) yang menjawab pertanyaan berdasarkan dokumen akademik kampus.
+SYSTEM_PROMPT = """You are an official academic assistant chatbot answering questions based on institutional academic documents and guidelines.
 
-ATURAN KETAT yang WAJIB diikuti:
+STRICT RULES that MUST be followed:
 
-1. **HANYA jawab berdasarkan konteks yang diberikan.** Jangan pernah menambahkan informasi dari pengetahuan umummu. Jika informasi tidak ada di konteks, katakan dengan jujur bahwa informasi tersebut tidak ditemukan.
+1. **ONLY answer based on the provided context.** Never add information from general knowledge or outside sources. If the information is not in the context, state honestly that it was not found.
 
-2. **Selalu sebutkan sumber.** Akhiri jawaban dengan satu baris dalam format persis `📄 Sumber: Halaman N — Nama Bagian`. Salin nomor halaman dari label sumber di konteks. Jangan mengganti kata "Halaman" atau mengarang nomor halaman.
+2. **Always cite your source.** End your response with exactly one source line in the format: `📄 Source: Page N — Section Title`. Copy the page number and section title from the source label in the context. Do not alter the word "Page" or invent page numbers.
 
-3. **Jawab dalam Bahasa Indonesia** yang sopan, jelas, dan profesional. Gunakan format yang mudah dibaca (bullet points, numbering) jika jawabannya berisi beberapa poin.
+3. **Answer in clear, polite, and professional English.** Use readable formatting (bullet points, numbered lists) when explaining multi-step procedures or requirements.
 
-4. **Jika pertanyaan di luar topik** dokumen kampus (misalnya tentang berita umum, hal pribadi, dll), tolak dengan sopan:
-   "Maaf, saya hanya dapat menjawab pertanyaan seputar dokumen akademik Universitas Atma Jaya Yogyakarta. Silakan ajukan pertanyaan terkait peraturan akademik, prosedur kampus, atau informasi yang ada di dokumen pedoman."
+4. **If the question is off-topic** from the academic documents (e.g. general news, personal matters), politely decline:
+   "I am only able to answer questions regarding the available academic documents. Please ask questions related to academic regulations, campus procedures, or information found in the guideline documents."
 
-5. **Jika informasi tidak ditemukan** dalam konteks yang diberikan, jawab:
-   "Mohon maaf, informasi mengenai hal tersebut tidak ditemukan dalam dokumen yang tersedia. Silakan hubungi bagian akademik kampus untuk informasi lebih lanjut."
+5. **If the information is not found** in the provided context, respond:
+   "I apologize, but that information is not found in the available documents. Please contact the academic office for further assistance."
 
-6. **Jangan mengarang atau berasumsi.** Lebih baik bilang tidak tahu daripada memberikan informasi yang salah.
+6. **Do not fabricate or assume.** It is always better to state that information is not available than to provide inaccurate details.
 
-7. **Pertahankan konteks percakapan.** Jika ada riwayat chat, gunakan untuk memahami konteks pertanyaan lanjutan."""
+7. **Maintain conversational context.** If chat history is provided, use it to understand follow-up questions."""
 
 
 # ──────────────────────────────────────────────
@@ -43,12 +43,12 @@ def build_prompt(
     chat_history: list[dict] | None = None,
 ) -> tuple[str, str]:
     """
-    Bangun prompt lengkap untuk LLM.
+    Build a complete prompt for the LLM.
 
     Args:
-        question: Pertanyaan pengguna.
-        retrieved_chunks: Chunk dokumen yang relevan dari retrieval.
-        chat_history: Riwayat chat sebelumnya (opsional).
+        question: User's question.
+        retrieved_chunks: Relevant document chunks from retrieval.
+        chat_history: Prior chat history (optional).
             Format: [{"role": "user"|"assistant", "content": "..."}]
 
     Returns:
@@ -56,59 +56,59 @@ def build_prompt(
     """
     parts = []
 
-    # Tambahkan konteks dari retrieved chunks
+    # Add context from retrieved chunks
     if retrieved_chunks:
         parts.append("=" * 50)
-        parts.append("KONTEKS DOKUMEN (gunakan HANYA informasi di bawah ini untuk menjawab):")
+        parts.append("DOCUMENT CONTEXT (use ONLY the information below to answer):")
         parts.append("=" * 50)
 
         for i, chunk in enumerate(retrieved_chunks, 1):
-            # `page_label` memberi rentang halaman yang ringkas ("51" atau
-            # "51-52") dan `heading_label` memberi jalur bagian berjenjang,
-            # sehingga LLM dapat mengutip sumber setepat mungkin.
             section = f" — {chunk.heading_label}" if chunk.heading_label else ""
-            parts.append(f"\n--- Sumber #{i} (Halaman {chunk.page_label}{section}) ---")
+            parts.append(f"\n--- Source #{i} (Page {chunk.page_label}{section}) ---")
             parts.append(chunk.text)
 
         parts.append("\n" + "=" * 50)
 
-    # Tambahkan riwayat percakapan jika ada (ambil 6 pesan terakhir saja)
+    # Add recent conversation history if present (up to last 6 messages)
     if chat_history:
         recent_history = chat_history[-6:]
-        parts.append("\nRIWAYAT PERCAKAPAN TERKINI:")
+        parts.append("\nRECENT CONVERSATION HISTORY:")
         for msg in recent_history:
-            role = "Pengguna" if msg["role"] == "user" else "Asisten"
+            role = "User" if msg["role"] == "user" else "Assistant"
             parts.append(f"{role}: {msg['content']}")
         parts.append("")
 
-    # Tambahkan pertanyaan
-    parts.append(f"PERTANYAAN PENGGUNA: {question}")
+    # Add question
+    parts.append(f"USER QUESTION: {question}")
 
-    # Instruksi akhir
+    # Final instructions
     if retrieved_chunks:
-        parts.append("\nJawab pertanyaan di atas HANYA berdasarkan konteks dokumen yang diberikan. "
-                      "Sertakan sumber (halaman/bagian) di akhir jawaban.")
+        parts.append(
+            "\nAnswer the question above based ONLY on the provided document context. "
+            "Include the source (page/section) at the end of your answer."
+        )
 
         citation_lines: list[str] = []
         for chunk in retrieved_chunks:
             if not chunk.page_numbers:
                 continue
             section = f" — {chunk.heading_label}" if chunk.heading_label else ""
-            source_line = f"📄 Sumber: Halaman {chunk.page_label}{section}"
+            source_line = f"📄 Source: Page {chunk.page_label}{section}"
             if source_line not in citation_lines:
                 citation_lines.append(source_line)
 
         if citation_lines:
             parts.append(
-                "\nFORMAT SITASI WAJIB: Akhiri jawaban dengan satu baris sumber. "
-                "Pilih sumber yang mendukung jawaban, lalu salin persis barisnya "
-                "dari daftar ini. Jangan hilangkan baris sumber atau mengubah "
-                "nomor halamannya:"
+                "\nMANDATORY CITATION FORMAT: End your answer with one source line. "
+                "Select the source that supports your answer, and copy the exact line "
+                "from this list. Do not omit the source line or modify the page numbers:"
             )
             parts.extend(citation_lines)
     else:
-        parts.append("\nTidak ada konteks dokumen yang relevan ditemukan untuk pertanyaan ini. "
-                      "Jawab sesuai aturan untuk kasus 'informasi tidak ditemukan'.")
+        parts.append(
+            "\nNo relevant document context was found for this question. "
+            "Answer according to the rule for 'information not found'."
+        )
 
     user_prompt = "\n".join(parts)
     return SYSTEM_PROMPT, user_prompt
@@ -116,15 +116,14 @@ def build_prompt(
 
 def build_no_context_response() -> str:
     """
-    Response ketika tidak ada chunk relevan yang ditemukan (FR-5).
-    Dipanggil TANPA memanggil LLM untuk hemat biaya API.
+    Response when no relevant chunks are found.
+    Called WITHOUT invoking LLM to save API costs.
     """
     return (
-        "Mohon maaf, informasi mengenai hal tersebut **tidak ditemukan** "
-        "dalam dokumen yang tersedia saat ini.\n\n"
-        "Beberapa saran:\n"
-        "- Coba formulasikan pertanyaan dengan kata kunci yang berbeda.\n"
-        "- Pastikan pertanyaan berkaitan dengan isi dokumen pedoman akademik.\n"
-        "- Hubungi bagian akademik kampus untuk informasi yang tidak tercakup "
-        "dalam dokumen ini."
+        "I apologize, but that information is **not found** "
+        "in the currently available documents.\n\n"
+        "Suggestions:\n"
+        "- Try rephrasing your question with different keywords.\n"
+        "- Ensure your question relates to the contents of the academic guidelines.\n"
+        "- Contact the academic office for details not covered in these documents."
     )

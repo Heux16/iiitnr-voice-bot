@@ -1,4 +1,4 @@
-"""test_query_rewriter.py — Heuristik dan pembersihan hasil penulisan ulang."""
+"""test_query_rewriter.py — Heuristics and cleanup for query rewriting."""
 
 from __future__ import annotations
 
@@ -15,50 +15,46 @@ from app.query_rewriter import (
 @pytest.fixture
 def history() -> list[dict]:
     return [
-        {"role": "user", "content": "Bagaimana ketentuan cuti studi di UAJY?"},
-        {"role": "assistant", "content": "Cuti studi dapat diajukan mahasiswa yang "
-                                         "telah mengikuti kegiatan akademik minimal "
-                                         "2 semester."},
+        {"role": "user", "content": "What are the rules for study leave?"},
+        {"role": "assistant", "content": "Study leave can be requested by students who "
+                                         "have completed academic activities for at least "
+                                         "2 semesters."},
     ]
 
 
 class TestNeedsRewrite:
     def test_tanpa_riwayat_tidak_perlu(self):
-        assert needs_rewrite("Berapa maksimalnya?", []) is False
-        assert needs_rewrite("Berapa maksimalnya?", None) is False
+        assert needs_rewrite("What is the maximum?", []) is False
+        assert needs_rewrite("What is the maximum?", None) is False
 
     def test_riwayat_tanpa_jawaban_asisten_tidak_perlu(self):
-        """Belum ada apa pun yang bisa dirujuk."""
-        hanya_user = [{"role": "user", "content": "Halo"}]
-        assert needs_rewrite("Berapa maksimalnya?", hanya_user) is False
+        """Nothing to refer to yet."""
+        hanya_user = [{"role": "user", "content": "Hello"}]
+        assert needs_rewrite("What is the maximum?", hanya_user) is False
 
     @pytest.mark.parametrize("query", [
-        "Berapa maksimalnya?",
-        "Apa itu?",
-        "Berapa lama maksimal?",
-        "Bagaimana prosedurnya?",
+        "What is the maximum?",
+        "What is that?",
+        "How long maximum?",
+        "What is the procedure?",
     ])
     def test_pertanyaan_pendek_perlu_ditulis_ulang(self, query, history):
         assert needs_rewrite(query, history) is True
 
     @pytest.mark.parametrize("query", [
-        "Bagaimana dengan biayanya?",
-        "Apa syarat untuk hal tersebut?",
-        "Kalau untuk program magister bagaimana ketentuan yang berlaku?",
+        "How about the fee?",
+        "What are the requirements for that?",
+        "How about the regulations for master's programs?",
     ])
     def test_kata_rujukan_perlu_ditulis_ulang(self, query, history):
         assert needs_rewrite(query, history) is True
 
     @pytest.mark.parametrize("query", [
-        "Berapa IPK minimum untuk lulus cum laude?",
-        "Apa saja ketentuan herregistrasi bagi mahasiswa baru?",
-        "Berapa total SKS minimal untuk lulus program sarjana?",
+        "What is the minimum GPA to graduate cum laude?",
+        "What are the re-registration requirements for new students?",
+        "What is the minimum total credits to graduate bachelor program?",
     ])
     def test_pertanyaan_mandiri_tidak_perlu(self, query, history):
-        """
-        Menulis ulang setiap pertanyaan berarti satu panggilan API tambahan
-        per query, padahal sebagian besar sudah mandiri.
-        """
         assert needs_rewrite(query, history) is False
 
     def test_query_kosong(self, history):
@@ -68,14 +64,14 @@ class TestNeedsRewrite:
 
 class TestBuildRewritePrompt:
     def test_memuat_riwayat_dan_pertanyaan(self, history):
-        prompt = build_rewrite_prompt("Berapa maksimalnya?", history)
-        assert "cuti studi" in prompt
-        assert "Berapa maksimalnya?" in prompt
+        prompt = build_rewrite_prompt("What is the maximum?", history)
+        assert "study leave" in prompt
+        assert "What is the maximum?" in prompt
 
-    def test_peran_diberi_label_indonesia(self, history):
+    def test_peran_diberi_label(self, history):
         prompt = build_rewrite_prompt("q", history)
-        assert "Pengguna:" in prompt
-        assert "Asisten:" in prompt
+        assert "User:" in prompt
+        assert "Assistant:" in prompt
 
     def test_pesan_panjang_dipotong(self):
         panjang = [
@@ -87,70 +83,69 @@ class TestBuildRewritePrompt:
 
     def test_hanya_jendela_terakhir_dipakai(self):
         banyak = [
-            {"role": "user" if i % 2 == 0 else "assistant", "content": f"pesan-{i}"}
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"message-{i}"}
             for i in range(20)
         ]
         prompt = build_rewrite_prompt("q", banyak)
-        assert "pesan-19" in prompt
-        assert "pesan-0" not in prompt
+        assert "message-19" in prompt
+        assert "message-0" not in prompt
 
 
 class TestSanitize:
     def test_teks_bersih_diteruskan(self):
-        assert _sanitize("Berapa maksimal cuti studi?", "asli") == "Berapa maksimal cuti studi?"
+        assert _sanitize("What is the maximum study leave?", "original") == "What is the maximum study leave?"
 
     def test_tanda_kutip_dibuang(self):
-        assert _sanitize('"Berapa maksimal cuti?"', "asli") == "Berapa maksimal cuti?"
+        assert _sanitize('"What is the maximum leave?"', "original") == "What is the maximum leave?"
 
     def test_awalan_dibuang(self):
-        assert _sanitize("Pertanyaan mandiri: Berapa maksimal cuti?", "asli") == \
-               "Berapa maksimal cuti?"
+        assert _sanitize("Standalone question: What is the maximum leave?", "original") == \
+               "What is the maximum leave?"
 
     def test_hanya_baris_pertama_dipakai(self):
-        hasil = _sanitize("Berapa maksimal cuti?\nPenjelasan tambahan.", "asli")
-        assert hasil == "Berapa maksimal cuti?"
+        hasil = _sanitize("What is the maximum leave?\nAdditional explanation.", "original")
+        assert hasil == "What is the maximum leave?"
 
     def test_balasan_kosong_jatuh_ke_asli(self):
-        assert _sanitize("", "query asli") == "query asli"
-        assert _sanitize("   ", "query asli") == "query asli"
+        assert _sanitize("", "original query") == "original query"
+        assert _sanitize("   ", "original query") == "original query"
 
     def test_balasan_terlalu_panjang_ditolak(self):
-        """Model yang malah menjawab pertanyaannya harus diabaikan."""
-        assert _sanitize("penjelasan " * 200, "query asli") == "query asli"
+        assert _sanitize("explanation " * 200, "original query") == "original query"
 
 
 class TestRewriteQuery:
     def test_dilewati_saat_heuristik_bilang_tidak_perlu(self, history, monkeypatch):
         def jangan_dipanggil(*args, **kwargs):
-            raise AssertionError("LLM tidak boleh dipanggil")
+            raise AssertionError("LLM should not be called")
 
         monkeypatch.setattr("app.query_rewriter.call_utility_llm", jangan_dipanggil)
-        mandiri = "Berapa IPK minimum untuk lulus cum laude?"
+        mandiri = "What is the minimum GPA to graduate cum laude?"
         assert rewrite_query(mandiri, history) == mandiri
 
     def test_force_melewati_heuristik(self, history, monkeypatch):
         monkeypatch.setattr(
             "app.query_rewriter.call_utility_llm",
-            lambda *a, **k: "Pertanyaan hasil tulis ulang?",
+            lambda *a, **k: "Rewritten question?",
         )
-        hasil = rewrite_query("Pertanyaan mandiri yang cukup panjang sekali?",
+        hasil = rewrite_query("A fairly long standalone question?",
                               history, force=True)
-        assert hasil == "Pertanyaan hasil tulis ulang?"
+        assert hasil == "Rewritten question?"
 
     def test_menulis_ulang_pertanyaan_lanjutan(self, history, monkeypatch):
         monkeypatch.setattr(
             "app.query_rewriter.call_utility_llm",
-            lambda *a, **k: "Berapa maksimal cuti studi yang dapat diajukan?",
+            lambda *a, **k: "What is the maximum study leave that can be requested?",
         )
-        hasil = rewrite_query("Berapa maksimalnya?", history)
-        assert hasil == "Berapa maksimal cuti studi yang dapat diajukan?"
+        hasil = rewrite_query("What is the maximum?", history)
+        assert hasil == "What is the maximum study leave that can be requested?"
 
     def test_kegagalan_api_jatuh_ke_query_asli(self, history, monkeypatch):
         monkeypatch.setattr(
             "app.query_rewriter.call_utility_llm",
-            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("API mati")),
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("API down")),
         )
-        assert rewrite_query("Berapa maksimalnya?", history) == "Berapa maksimalnya?"
+        assert rewrite_query("What is the maximum?", history) == "What is the maximum?"
 
     def test_tanpa_riwayat_mengembalikan_apa_adanya(self):
-        assert rewrite_query("Berapa maksimalnya?", None) == "Berapa maksimalnya?"
+        assert rewrite_query("What is the maximum?", None) == "What is the maximum?"

@@ -1,25 +1,22 @@
 """
-query_rewriter.py — Ubah pertanyaan lanjutan menjadi query mandiri sebelum
-retrieval.
+query_rewriter.py — Rewrite follow-up questions into standalone queries before retrieval.
 
-Masalah yang diselesaikan:
-    Retrieval bekerja per query, tanpa memori. Ketika pengguna bertanya
-    "berapa syaratnya?" setelah sebelumnya membahas cuti kuliah, embedding
-    dari kalimat itu sendiri hampir tidak membawa informasi — sistem akan
-    mengambil chunk acak yang menyebut kata "syarat". Riwayat chat memang
-    dikirim ke LLM penjawab, tetapi itu terlambat: konteks yang salah sudah
-    terambil.
+Problem solved:
+    Retrieval operates per-query without conversation memory. When a user asks
+    "what are the requirements?" after discussing leave of absence, the embedding
+    of that sentence alone carries little signal — retrieving random chunks that mention
+    "requirements". The chat history is passed to the final answer LLM, but by then
+    the wrong context has already been retrieved.
 
-    Solusinya menulis ulang pertanyaan menjadi bentuk mandiri
-    ("berapa syarat pengajuan cuti kuliah?") SEBELUM retrieval berjalan.
+    The solution is rewriting follow-up questions into standalone form
+    ("what are the requirements for academic leave of absence?") BEFORE retrieval runs.
 
-Hemat kuota:
-    Menulis ulang setiap pertanyaan berarti satu panggilan LLM tambahan per
-    query. Padahal sebagian besar pertanyaan sudah mandiri. Karena itu ada
-    penyaring heuristik lebih dulu; LLM hanya dipanggil ketika pertanyaan
-    benar-benar terlihat bergantung pada konteks sebelumnya.
+Cost saving:
+    Rewriting every query would add an extra LLM call per turn. However, most questions
+    are already standalone. Heuristics filter queries first; the LLM is only called
+    when the question clearly depends on prior context.
 
-Modul ini **fail-safe**: kegagalan apa pun mengembalikan query asli.
+This module is **fail-safe**: any failure falls back to the original query.
 """
 
 from __future__ import annotations
@@ -28,8 +25,13 @@ import re
 
 from app.llm_client import call_utility_llm
 
-#: Penanda bahwa pertanyaan merujuk sesuatu yang disebut sebelumnya.
+#: Indicators that a question refers to something mentioned previously.
 _REFERENTIAL_MARKERS = (
+    "it", "they", "them", "that", "this", "these", "those", "their", "his", "her", "its",
+    "the former", "the latter", "previous", "earlier", "above",
+    "how about", "what about", "then", "next", "also", "besides",
+    "how long", "why", "is that so", "for example", "details", "difference",
+    # Legacy Indonesian markers
     "itu", "tersebut", "tadi", "sebelumnya", "yang mana", "kalau",
     "bagaimana dengan", "gimana dengan", "terus", "lalu", "kemudian",
     "dia", "mereka", "nya", "ini", "begitu", "sama seperti",
@@ -37,47 +39,43 @@ _REFERENTIAL_MARKERS = (
     "contohnya", "misalnya", "detailnya", "lengkapnya", "bedanya",
 )
 
-#: Pertanyaan dengan kata sebanyak ini atau kurang hampir pasti butuh konteks
-#: ("berapa syaratnya?", "apa itu?", "berapa lama maksimal?").
-#: Dihitung dari kata mentah, bukan token hasil tokenisasi: tokenizer membuang
-#: stopwords sehingga pertanyaan mandiri seperti "Berapa IPK minimum untuk
-#: lulus cum laude?" pun menyusut jadi empat token.
+#: Questions with this many raw words or fewer almost certainly require context.
 _SHORT_QUERY_WORD_LIMIT = 4
 
-#: Berapa pesan terakhir yang dipakai sebagai konteks penulisan ulang.
+#: Number of previous messages used as rewrite context.
 _HISTORY_WINDOW = 6
 
-#: Batas panjang tiap pesan riwayat dalam prompt, agar prompt tetap ringkas.
+#: Character limit for each history message to keep prompt concise.
 _HISTORY_MESSAGE_CHAR_LIMIT = 400
 
-REWRITE_SYSTEM_PROMPT = """Kamu adalah komponen penulis ulang query pada sistem pencarian dokumen akademik.
+REWRITE_SYSTEM_PROMPT = """You are a query rewriting component in an academic document search system.
 
-Tugasmu: mengubah pertanyaan terakhir pengguna menjadi pertanyaan MANDIRI yang bisa dipahami tanpa membaca riwayat percakapan.
+Your task: rewrite the user's latest question into a STANDALONE question that can be understood without reading conversation history.
 
-Aturan:
-1. Ganti kata rujukan ("itu", "tersebut", "-nya", "dia") dengan entitas yang dimaksud dari riwayat percakapan.
-2. Pertahankan maksud asli. JANGAN menambah syarat, batasan, atau topik baru.
-3. Pertahankan semua istilah dan angka spesifik dari pertanyaan asli.
-4. Jika pertanyaan terakhir sudah mandiri, kembalikan APA ADANYA tanpa perubahan.
-5. Gunakan Bahasa Indonesia.
-6. Balas HANYA dengan satu kalimat pertanyaan hasil penulisan ulang. Tanpa penjelasan, tanpa tanda kutip, tanpa awalan apa pun."""
+Rules:
+1. Replace reference words ("it", "they", "that", "this", "its", "their") with the referenced entity from the conversation history.
+2. Maintain the original intent. DO NOT add new conditions, constraints, or topics.
+3. Retain all specific terms and numbers from the original question.
+4. If the latest question is already standalone, return it AS IS without modification.
+5. Use English.
+6. Reply ONLY with the single standalone rewritten question. No explanations, no quotation marks, no prefixes."""
 
 
 def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
     """
-    Tentukan apakah query perlu ditulis ulang, tanpa memanggil LLM.
+    Determine whether a query needs rewriting, without calling an LLM.
 
-    True bila ada riwayat percakapan DAN pertanyaannya terlihat bergantung
-    konteks: sangat pendek, atau memuat kata rujukan.
+    True if conversation history exists AND the question appears context-dependent:
+    very short, or contains referential markers.
 
     Args:
-        query: Pertanyaan terakhir pengguna.
-        chat_history: Riwayat percakapan sebelumnya.
+        query: User's latest question.
+        chat_history: Prior conversation history.
     """
     if not chat_history:
         return False
 
-    # Butuh minimal satu putaran percakapan sebelumnya untuk dirujuk.
+    # Need at least one prior assistant message to refer to.
     if not any(msg.get("role") == "assistant" for msg in chat_history):
         return False
 
@@ -90,9 +88,7 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
 
     lowered = stripped.lower()
 
-    # Sufiks posesif "-nya" adalah rujukan yang paling sering muncul
-    # ("berapa biayanya", "apa syaratnya") dan tidak tertangkap pencocokan
-    # kata utuh karena menempel pada kata dasarnya.
+    # Possessive suffix "-nya" in Indonesian
     if re.search(r"\w{3,}nya\b", lowered):
         return True
 
@@ -103,36 +99,32 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
 
 
 def build_rewrite_prompt(query: str, chat_history: list[dict]) -> str:
-    """Susun prompt penulisan ulang dari jendela riwayat terakhir."""
+    """Construct rewrite prompt from recent conversation history window."""
     recent = chat_history[-_HISTORY_WINDOW:]
 
-    parts = ["RIWAYAT PERCAKAPAN:"]
+    parts = ["CONVERSATION HISTORY:"]
     for msg in recent:
-        role = "Pengguna" if msg.get("role") == "user" else "Asisten"
+        role = "User" if msg.get("role") == "user" else "Assistant"
         content = (msg.get("content") or "").strip()
         if len(content) > _HISTORY_MESSAGE_CHAR_LIMIT:
             content = content[:_HISTORY_MESSAGE_CHAR_LIMIT].rsplit(" ", 1)[0] + " …"
         parts.append(f"{role}: {content}")
 
-    parts.append(f"\nPERTANYAAN TERAKHIR PENGGUNA:\n{query}")
-    parts.append("\nPertanyaan mandiri hasil penulisan ulang:")
+    parts.append(f"\nLATEST USER QUESTION:\n{query}")
+    parts.append("\nStandalone rewritten question:")
     return "\n".join(parts)
 
 
 def _sanitize(raw: str, fallback: str) -> str:
     """
-    Bersihkan balasan model dan tolak hasil yang jelas menyimpang.
-
-    Model bantu sesekali menambahkan awalan, tanda kutip, atau malah
-    menjawab pertanyaannya. Hasil yang terlalu panjang atau multi-baris
-    dianggap gagal dan query asli dipakai kembali.
+    Clean up model response and reject invalid output.
     """
     if not raw:
         return fallback
 
     text = raw.strip()
 
-    # Ambil baris tidak kosong pertama.
+    # Take first non-empty line
     for line in text.splitlines():
         if line.strip():
             text = line.strip()
@@ -140,7 +132,7 @@ def _sanitize(raw: str, fallback: str) -> str:
 
     text = re.sub(r'^["\'`]+|["\'`]+$', "", text).strip()
     text = re.sub(
-        r"^(pertanyaan mandiri|hasil penulisan ulang|query|jawaban)\s*[:\-]\s*",
+        r"^(standalone question|rewritten question|query|answer|pertanyaan mandiri|hasil penulisan ulang|jawaban)\s*[:\-]\s*",
         "",
         text,
         flags=re.IGNORECASE,
@@ -149,8 +141,8 @@ def _sanitize(raw: str, fallback: str) -> str:
     if not text:
         return fallback
 
-    # Penulisan ulang yang wajar tidak akan jauh lebih panjang dari aslinya.
-    if len(text) > max(240, len(fallback) * 6):
+    # Model answering the question directly instead of rewriting
+    if len(text.split()) > 40:
         return fallback
 
     return text
@@ -163,32 +155,28 @@ def rewrite_query(
     force: bool = False,
 ) -> str:
     """
-    Kembalikan bentuk mandiri dari `query`, atau query asli bila tak perlu.
+    Rewrite follow-up question into standalone query using utility LLM.
 
-    Args:
-        query: Pertanyaan terakhir pengguna.
-        chat_history: Riwayat percakapan (format ``{"role", "content"}``).
-        api_key: Override API key Gemini.
-        force: Lewati penyaring heuristik dan selalu panggil LLM.
-
-    Returns:
-        Query yang akan dipakai untuk retrieval. Selalu berupa string yang
-        bisa dipakai — kegagalan apa pun jatuh kembali ke query asli.
+    Fail-safe: any failure returns the original query.
     """
+    if not query or not query.strip():
+        return query
+
     if not force and not needs_rewrite(query, chat_history):
         return query
 
     if not chat_history:
         return query
 
+    prompt = build_rewrite_prompt(query, chat_history)
+
     try:
-        raw = call_utility_llm(
-            build_rewrite_prompt(query, chat_history),
+        raw_response = call_utility_llm(
+            prompt,
             system_instruction=REWRITE_SYSTEM_PROMPT,
-            max_tokens=256,
+            max_tokens=64,
             api_key=api_key,
         )
+        return _sanitize(raw_response, fallback=query)
     except Exception:
         return query
-
-    return _sanitize(raw, fallback=query)

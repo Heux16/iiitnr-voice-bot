@@ -1,4 +1,4 @@
-"""Komponen sumber interaktif dan renderer halaman PDF untuk mahasiswa."""
+"""Interactive source component and document renderer (PDF & Markdown)."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ DEFAULT_PDF_NAME = "Buku-Pedoman-Akademik-Fakultas-Teknologi-Industri-2025-2026.
 
 @st.cache_data(show_spinner=False)
 def _pdf_page_pdf_bytes(path_string: str, page_number: int) -> bytes:
-    """Buat PDF satu halaman untuk dibuka di viewer native browser."""
+    """Generate single-page PDF to open in native browser viewer."""
     document = pymupdf.open(path_string)
     try:
         if page_number < 1 or page_number > len(document):
-            raise ValueError(f"Halaman {page_number} di luar dokumen.")
+            raise ValueError(f"Page {page_number} is outside the document.")
         single_page = pymupdf.open()
         try:
             single_page.insert_pdf(
@@ -36,18 +36,12 @@ def _pdf_page_pdf_bytes(path_string: str, page_number: int) -> bytes:
 
 @st.cache_data(show_spinner=False)
 def _pdf_page_image(path_string: str, page_number: int, zoom: float = 1.5) -> bytes:
-    """
-    Render satu halaman PDF menjadi PNG.
-
-    Browser PDF viewer/iframe tidak konsisten saat menerima data URL dari
-    Streamlit. Dengan merender halaman di server menjadi PNG, isi halaman
-    pasti terlihat di semua browser, termasuk VPS tanpa PDF plugin.
-    """
+    """Render a single PDF page as PNG."""
     document = pymupdf.open(path_string)
     try:
         if page_number < 1 or page_number > len(document):
             raise ValueError(
-                f"Halaman {page_number} di luar dokumen ({len(document)} halaman)."
+                f"Page {page_number} is outside the document ({len(document)} pages)."
             )
         page = document.load_page(page_number - 1)
         pixmap = page.get_pixmap(
@@ -60,13 +54,26 @@ def _pdf_page_image(path_string: str, page_number: int, zoom: float = 1.5) -> by
 
 
 def _safe_pdf_path(source_document: str) -> Path | None:
-    """Resolve dokumen hanya dari folder data, tanpa path traversal."""
-    filename = source_document or DEFAULT_PDF_NAME
-    candidate = (DATA_DIR / Path(filename).name).resolve()
+    """Resolve documents only within the data directory, preventing path traversal."""
     data_root = DATA_DIR.resolve()
-    if candidate.parent != data_root or not candidate.exists() or candidate.suffix.lower() != ".pdf":
-        return None
-    return candidate
+    filename = Path(source_document).name if source_document else DEFAULT_PDF_NAME
+
+    # First check direct child of DATA_DIR
+    candidate = (data_root / filename).resolve()
+    if candidate.exists() and candidate.is_file() and (candidate.parent == data_root or data_root in candidate.parents):
+        if candidate.suffix.lower() in (".pdf", ".md", ".markdown"):
+            return candidate
+
+    # Search subdirectories under data_root
+    for match in data_root.rglob(filename):
+        if match.is_file() and data_root in match.resolve().parents:
+            if match.suffix.lower() in (".pdf", ".md", ".markdown"):
+                return match.resolve()
+
+    return None
+
+
+_safe_document_path = _safe_pdf_path
 
 
 def _viewer_reference_key(reference: dict) -> str:
@@ -80,31 +87,31 @@ def render_source_references(
     key_prefix: str,
     public: bool = True,
 ) -> None:
-    """Render sumber sebagai tombol pembuka viewer halaman."""
+    """Render sources as interactive buttons opening document viewer."""
     if not references:
         return
 
     st.markdown(
-        '<div class="source-box"><strong>📚 Sumber Dokumen:</strong>'
+        '<div class="source-box"><strong>📚 Document Sources:</strong>'
         '<div style="margin-top:4px;color:var(--muted);font-size:0.82rem;">'
-        'Klik halaman untuk menampilkan isi PDF.</div></div>',
+        'Click a source to display the cited document content.</div></div>',
         unsafe_allow_html=True,
     )
 
     for index, reference in enumerate(references):
-        label = f"📄 Halaman {reference.get('page_label', '-')}"
+        label = f"📄 Page {reference.get('page_label', '-')}"
         section = reference.get("section_title")
         if section:
             label += f" · {section}"
         if not public and reference.get("score") is not None:
-            label += f" · relevansi {reference['score']:.0%}"
+            label += f" · relevance {reference['score']:.0%}"
 
         if st.button(
             label,
             key=f"{key_prefix}_source_{index}_{_viewer_reference_key(reference)}",
             type="secondary",
             width="stretch",
-            help="Tampilkan halaman PDF yang dikutip",
+            help="Show cited document",
         ):
             st.session_state["pdf_viewer_reference"] = reference
             st.session_state["pdf_viewer_open"] = True
@@ -112,35 +119,68 @@ def render_source_references(
 
 
 def render_pdf_viewer() -> None:
-    """Tampilkan isi halaman PDF terpilih sebagai preview yang selalu terlihat."""
+    """Display selected document content (PDF or Markdown) as a preview."""
     if not st.session_state.get("pdf_viewer_open"):
         return
 
     reference = st.session_state.get("pdf_viewer_reference") or {}
     path = _safe_pdf_path(reference.get("source_document", ""))
     if path is None:
-        st.error("Dokumen PDF sumber tidak tersedia di server.")
+        st.error("Source document is not available on the server.")
         return
 
+    # Markdown file handling
+    if path.suffix.lower() in (".md", ".markdown"):
+        st.divider()
+        with st.container(border=True):
+            title = reference.get("section_title") or "Markdown Document Source"
+            st.subheader(f"📖 View Markdown Document — {title}")
+            st.caption(
+                f"{path.name} · section/page: {reference.get('page_label', '-')}"
+            )
+            try:
+                content = path.read_text(encoding="utf-8", errors="replace")
+                st.markdown(content)
+            except Exception as e:
+                st.error(f"Failed to read Markdown file: {e}")
+
+            col_close, col_download = st.columns([1, 1])
+            with col_close:
+                if st.button("Close viewer", key="close_md_viewer", width="stretch"):
+                    st.session_state.pop("pdf_viewer_reference", None)
+                    st.session_state["pdf_viewer_open"] = False
+                    st.rerun()
+            with col_download:
+                st.download_button(
+                    "Download Markdown",
+                    data=path.read_bytes(),
+                    file_name=path.name,
+                    mime="text/markdown",
+                    key="download_source_md",
+                    width="stretch",
+                )
+        return
+
+    # PDF file handling
     pages = [int(page) for page in reference.get("pages", []) if str(page).isdigit()]
     if not pages:
         pages = [1]
 
     st.divider()
     with st.container(border=True):
-        title = reference.get("section_title") or "Sumber Dokumen"
-        st.subheader(f"📖 Lihat Dokumen — {title}")
+        title = reference.get("section_title") or "Document Source"
+        st.subheader(f"📖 View Document — {title}")
         st.caption(
-            f"{path.name} · halaman asli: {reference.get('page_label', '-')}. "
-            "Preview halaman terpilih:"
+            f"{path.name} · original page: {reference.get('page_label', '-')}. "
+            "Selected page preview:"
         )
 
         selected_page = st.selectbox(
-            "Halaman PDF",
+            "PDF Page",
             options=pages,
             index=0,
             key="pdf_viewer_selected_page",
-            format_func=lambda page: f"Halaman {page}",
+            format_func=lambda page: f"Page {page}",
         )
 
         try:
@@ -150,38 +190,35 @@ def render_pdf_viewer() -> None:
                 f"""
                 <div style="background:#ffffff;border:1px solid #d8e7ef;border-radius:8px;padding:18px;text-align:center;">
                   <img src="data:image/png;base64,{encoded_image}"
-                       alt="Halaman {selected_page} dari {path.name}"
+                       alt="Page {selected_page} of {path.name}"
                        style="display:block;width:100%;height:auto;margin:0 auto;" />
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-            st.caption(f"Halaman {selected_page} · {path.name}")
+            st.caption(f"Page {selected_page} · {path.name}")
 
-            # PDF satu halaman berukuran kecil dibuka di tab baru memakai
-            # viewer native browser — tampilannya mengikuti screenshot
-            # referensi dengan toolbar zoom/print/download.
             native_pdf = _pdf_page_pdf_bytes(str(path), selected_page)
             native_encoded = base64.b64encode(native_pdf).decode("ascii")
             st.markdown(
                 f'<a href="data:application/pdf;base64,{native_encoded}#page=1" '
                 'target="_blank" rel="noopener" '
                 'style="display:block;text-align:center;margin:10px 0 2px;color:#14809F;font-weight:700;">'
-                '↗ Buka PDF dengan viewer browser</a>',
+                '↗ Open PDF in browser viewer</a>',
                 unsafe_allow_html=True,
             )
         except Exception:
-            st.error("Halaman PDF tidak dapat dirender.")
+            st.error("PDF page could not be rendered.")
 
         col_close, col_download = st.columns([1, 1])
         with col_close:
-            if st.button("Tutup viewer", key="close_pdf_viewer", width="stretch"):
+            if st.button("Close viewer", key="close_pdf_viewer", width="stretch"):
                 st.session_state.pop("pdf_viewer_reference", None)
                 st.session_state["pdf_viewer_open"] = False
                 st.rerun()
         with col_download:
             st.download_button(
-                "Unduh PDF",
+                "Download PDF",
                 data=path.read_bytes(),
                 file_name=path.name,
                 mime="application/pdf",

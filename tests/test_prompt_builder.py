@@ -1,21 +1,21 @@
-"""Prompt jawaban harus menyertakan format sitasi yang bisa disalin model."""
+"""Answer prompt must provide exact citation format that the model can copy."""
 
 from app.prompt_builder import build_prompt
 from app.retrieval import RetrievalCandidate
 
 
-def test_prompt_menyediakan_baris_sumber_persis_dari_konteks():
+def test_prompt_provides_exact_source_line_from_context():
     context = RetrievalCandidate(
         chunk_index=1,
-        text="Mahasiswa mengajukan permohonan cuti studi kepada program studi.",
+        text="Students submit study leave applications to the department.",
         page_numbers=[39, 40, 41],
-        section_title="H. Cuti Studi",
-        heading_path=["LAYANAN AKADEMIK", "H. Cuti Studi"],
+        section_title="Study Leave",
+        heading_path=["ACADEMIC SERVICES", "Study Leave"],
     )
 
     _system_prompt, user_prompt = build_prompt(
-        "Bagaimana prosedur pengajuan cuti kuliah?", [context]
+        "What is the procedure for study leave?", [context]
     )
 
-    assert "FORMAT SITASI WAJIB" in user_prompt
-    assert "📄 Sumber: Halaman 39-41 — H. Cuti Studi" in user_prompt
+    assert "MANDATORY CITATION FORMAT" in user_prompt
+    assert "📄 Source: Page 39-41 — Study Leave" in user_prompt

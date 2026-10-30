@@ -229,7 +229,7 @@ class TestFormatSources:
         a = candidate_factory(chunk_index=0, page_numbers=[48], section_title="A")
         b = candidate_factory(chunk_index=1, page_numbers=[27], section_title="B")
         hasil = format_sources([a, b])
-        assert "Halaman 27, 48" in hasil
+        assert "Page 27, 48" in hasil
         assert len(hasil.splitlines()) == 1
 
 

@@ -1,10 +1,9 @@
 """
-main_streamlit.py — Antarmuka Chatbot RAG Dokumen Kampus UAJY.
+main_streamlit.py — Academic Document RAG Chatbot Interface.
 
-Tampilannya mengikuti bahasa desain portal akademik kampus: latar biru sangat
-muda, kartu putih bergaris tipis, judul bagian berupa header strip, sidebar
-putih dengan label kelompok navigasi, dan aksen tunggal cyan. Definisi
-gayanya ada di `app/theme.py`.
+Design follows the campus academic portal aesthetic: light blue background,
+clean white bordered cards, cyan group headers, and crisp responsive components.
+Style definitions are maintained in `app/theme.py`.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-# Tambahkan root project ke sys.path
+# Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.answer_guard import diagnose_answer
@@ -32,7 +31,7 @@ from app.config import (
     UTILITY_MODEL,
     RetrievalConfig,
 )
-from app.llm_client import LLMConfigError, call_llm, effective_model
+from app.llm_client import LLMConfigError, call_llm, call_llm_stream, effective_model
 from app.pdf_viewer import render_pdf_viewer, render_source_references
 from app.prompt_builder import build_no_context_response, build_prompt
 from app.public_config import (
@@ -65,15 +64,12 @@ LOGGER = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="RAG Chatbot | Dokumen Kampus UAJY",
+    page_title="Academic RAG Chatbot | Documents",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Tema visual mengikuti bahasa desain portal akademik kampus.
-# Definisinya ada di app/theme.py agar berkas ini tetap berisi alur
-# aplikasi, bukan ratusan baris CSS.
 inject_theme()
 
 
@@ -89,7 +85,7 @@ def load_retriever() -> tuple[DocumentRetriever | None, str | None]:
     except FileNotFoundError as e:
         return None, str(e)
     except Exception as e:
-        return None, f"Error memuat index: {e}"
+        return None, f"Error loading index: {e}"
 
 
 @st.cache_data
@@ -112,35 +108,26 @@ def load_test_questions() -> list[dict]:
 
 
 # ──────────────────────────────────────────────
-# Panel Debug Retrieval
+# Retrieval Debug Panel
 # ──────────────────────────────────────────────
 
 def outcome_to_debug(outcome: RetrievalOutcome) -> dict:
-    """
-    Ringkas hasil retrieval menjadi data yang bisa disimpan di riwayat chat.
-
-    `RetrievalOutcome` memuat objek yang tidak ramah untuk disimpan di
-    session state, jadi hanya angka dan teks yang diambil. Dengan begini
-    panel debug tetap bisa dirender ulang setiap kali Streamlit menjalankan
-    skrip dari awal.
-    """
+    """Summarize retrieval outcome into session-safe dictionary."""
     used = {candidate.chunk_index for candidate in outcome.contexts}
 
-    banyak_dokumen = len({
+    many_documents = len({
         c.source_document for c in outcome.candidates if c.source_document
     }) > 1
 
     rows = []
     for candidate in outcome.candidates:
         rows.append({
-            "Dipakai": "✅" if candidate.chunk_index in used else "",
+            "Used": "✅" if candidate.chunk_index in used else "",
             "Chunk": candidate.chunk_index,
-            **({"Dokumen": candidate.document_label[:24]} if banyak_dokumen else {}),
-            "Halaman": candidate.page_label,
-            # Panel debug menampilkan jalur lengkap agar hierarki bisa diaudit;
-            # sitasi ke pengguna hanya memakai heading terdalam.
-            "Bagian": candidate.heading_path_label or "-",
-            "Ditemukan oleh": candidate.retrieved_by,
+            **({"Document": candidate.document_label[:24]} if many_documents else {}),
+            "Page": candidate.page_label,
+            "Section": candidate.heading_path_label or "-",
+            "Retrieved by": candidate.retrieved_by,
             "Dense (cosine)": round(candidate.dense_score, 3),
             "BM25": round(candidate.lexical_score, 2),
             "RRF": round(candidate.fusion_score, 5),
@@ -148,8 +135,8 @@ def outcome_to_debug(outcome: RetrievalOutcome) -> dict:
                 round(candidate.rerank_score, 1)
                 if candidate.rerank_score is not None else None
             ),
-            "Cakupan istilah": f"{candidate.lexical_coverage:.0%}",
-            "Istilah cocok": ", ".join(candidate.matched_terms) or "-",
+            "Term coverage": f"{candidate.lexical_coverage:.0%}",
+            "Matched terms": ", ".join(candidate.matched_terms) or "-",
         })
 
     return {
@@ -165,12 +152,12 @@ def outcome_to_debug(outcome: RetrievalOutcome) -> dict:
 
 
 def render_retrieval_debug(debug: dict) -> None:
-    """Tampilkan rincian skor tiap tahap pipeline retrieval."""
+    """Render retrieval metrics and score breakdown across pipeline stages."""
     if not debug:
         return
 
     rows = debug.get("rows") or []
-    label = f"🔬 Rincian retrieval ({len(rows)} kandidat)"
+    label = f"🔬 Retrieval Details ({len(rows)} candidates)"
 
     with st.expander(label, expanded=False):
         timings = debug.get("timings_ms") or {}
@@ -179,8 +166,8 @@ def render_retrieval_debug(debug: dict) -> None:
                 "rewrite_ms": "Query rewriting",
                 "dense_ms": "Dense (embed + FAISS)",
                 "lexical_ms": "BM25",
-                "fusion_ms": "Fusi RRF",
-                "rerank_ms": "Reranker LLM",
+                "fusion_ms": "RRF Fusion",
+                "rerank_ms": "LLM Reranker",
             }
             cols = st.columns(len(timings) + 1)
             for col, (key, value) in zip(cols, timings.items()):
@@ -190,45 +177,38 @@ def render_retrieval_debug(debug: dict) -> None:
         gate = debug.get("gate") or {}
         if gate:
             st.caption(
-                "**Gate relevansi** — "
-                f"kemiripan tertinggi {gate.get('max_dense_score', 0):.3f} "
-                f"(ambang {gate.get('dense_threshold', 0):.2f}) · "
-                f"cakupan istilah tertinggi {gate.get('max_lexical_coverage', 0):.0%} "
-                f"(ambang {gate.get('lexical_coverage_threshold', 0):.0%}) · "
-                f"jalur dense {'lolos' if gate.get('dense_pass') else 'gagal'}, "
-                f"jalur leksikal {'lolos' if gate.get('lexical_pass') else 'gagal'}"
+                "**Relevance Gate** — "
+                f"max similarity {gate.get('max_dense_score', 0):.3f} "
+                f"(threshold {gate.get('dense_threshold', 0):.2f}) · "
+                f"max term coverage {gate.get('max_lexical_coverage', 0):.0%} "
+                f"(threshold {gate.get('lexical_coverage_threshold', 0):.0%}) · "
+                f"dense branch {'passed' if gate.get('dense_pass') else 'failed'}, "
+                f"lexical branch {'passed' if gate.get('lexical_pass') else 'failed'}"
                 + (
-                    f", reranker {'lolos' if gate.get('rerank_pass') else 'menolak'}"
+                    f", reranker {'passed' if gate.get('rerank_pass') else 'rejected'}"
                     if "rerank_pass" in gate else ""
                 )
             )
 
         if debug.get("rerank_failed"):
             st.error(
-                "Reranker gagal dipanggil, jadi urutan hasil fusi dipakai apa "
-                "adanya dan gate presisi tidak berjalan untuk pertanyaan ini. "
-                "Biasanya karena API sedang sibuk — coba ulangi.",
+                "Reranker failed to execute; fusion rank order was used and "
+                "precision gate was skipped for this question. "
+                "This usually happens when the API is busy — try again.",
                 icon="🔥",
             )
 
         if debug.get("refused"):
-            st.warning(f"Ditolak: {debug.get('refusal_reason', '-')}")
+            st.warning(f"Refused: {debug.get('refusal_reason', '-')}")
 
         if rows:
             st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         else:
-            st.info("Tidak ada kandidat yang ditemukan pada kedua jalur pencarian.")
+            st.info("No candidates found in either search branch.")
 
 
 def render_index_freshness(retriever: DocumentRetriever | None) -> None:
-    """
-    Peringatkan bila index sudah tidak sesuai dengan dokumen sumbernya.
-
-    Ini kegagalan yang paling sulit disadari pengguna: chatbot tetap menjawab
-    dengan penuh keyakinan dari dokumen versi lama, lengkap dengan sitasi
-    halaman yang tampak sah. Pemeriksaannya memakai hash yang dicatat saat
-    index dibangun.
-    """
+    """Warn when the index is out of sync with source documents."""
     if not retriever:
         return
 
@@ -238,25 +218,24 @@ def render_index_freshness(retriever: DocumentRetriever | None) -> None:
 
     pesan = "\n\n".join(f"- {m}" for m in freshness.messages())
     st.warning(
-        f"**Index mungkin sudah usang.**\n\n{pesan}\n\n"
-        "Jalankan `python ingestion/build_index.py --yes` untuk membangun ulang.",
+        f"**Index may be outdated.**\n\n{pesan}\n\n"
+        "Run `python ingestion/build_index.py --yes` to rebuild.",
         icon="🕒",
     )
 
 
 def render_hero() -> None:
-    """Kartu sambutan, mengikuti pola halaman muka portal akademik kampus."""
+    """Hero welcome card matching campus academic portal styling."""
     render_welcome(
-        "Selamat Datang di Chatbot Akademik FTI",
-        "Ajukan pertanyaan seputar <strong>Buku Pedoman Akademik Fakultas Teknologi "
-        "Industri Universitas Atma Jaya Yogyakarta</strong>. Setiap jawaban disusun "
-        "hanya dari isi dokumen resmi dan selalu menyertakan nomor halaman serta "
-        "bagian sumbernya, sehingga dapat Anda periksa sendiri.",
+        "Welcome to the IIIT-NR Academic Chatbot",
+        "Ask questions about <strong>IIIT-NR Academic Guidelines, Faculty Profiles, Admissions, Curriculum, and Campus Information</strong>. "
+        "Every answer is constructed strictly from official documents and includes "
+        "page numbers and section titles so you can verify each detail directly.",
     )
 
 
 # ──────────────────────────────────────────────
-# View 1: Tanya Jawab (Chatbot)
+# View 1: Q&A Chat
 # ──────────────────────────────────────────────
 
 def render_chat_view(
@@ -265,45 +244,45 @@ def render_chat_view(
     operator_mode: bool = False,
     rate_limiter: SessionRateLimiter | None = None,
 ) -> None:
-    st.header("Tanya Jawab Akademik")
+    st.header("Academic Q&A")
     render_lead(
-        "Ajukan pertanyaan dalam Bahasa Indonesia seputar ketentuan akademik, "
-        "SKS, skripsi, cuti, atau yudisium."
+        "Ask questions in English about academic policies, credit requirements, "
+        "thesis guidelines, leave of absence, or graduation."
     )
 
     if not retriever:
         if operator_mode:
             st.error(
-                "Index dokumen belum ditemukan. Jalankan "
-                "`python ingestion/build_index.py` terlebih dahulu."
+                "Document index not found. Run "
+                "`python ingestion/build_index.py` first."
             )
         else:
             st.error(
-                "Layanan chatbot sedang dipersiapkan. Silakan coba lagi nanti "
-                "atau hubungi administrator."
+                "Chatbot service is being prepared. Please try again later "
+                "or contact the administrator."
             )
         return
 
     # Preset Questions Picker
     preset_col, action_col = st.columns([3, 1])
     sample_queries = [
-        "-- Pilih contoh pertanyaan --",
-        "Berapa beban SKS minimal dan maksimal per semester?",
-        "Bagaimana prosedur pengajuan cuti kuliah?",
-        "Apa saja syarat untuk pengajuan ujian skripsi/tugas akhir?",
-        "Berapa IPK minimum untuk predikat kelulusan Cum Laude?",
-        "Berapa lama masa studi maksimal untuk program sarjana S1?",
+        "-- Select a sample question --",
+        "Who is Dr. Abhishek Sharma and what is his research area?",
+        "What are the admission requirements for B.Tech at IIIT-NR?",
+        "What are the placement statistics and top recruiters?",
+        "What is the curriculum and credit structure for B.Tech CSE?",
+        "What campus facilities and research laboratories are available?",
     ]
     with preset_col:
         selected_sample = st.selectbox(
-            "Contoh pertanyaan",
+            "Sample questions",
             options=sample_queries,
-            help="Pilih contoh pertanyaan umum untuk mencoba alur chatbot secara langsung.",
+            help="Select a common question to test the chatbot workflow directly.",
         )
     with action_col:
         st.write("")
         st.write("")
-        if st.button("Kirim pertanyaan", type="primary", disabled=(selected_sample == sample_queries[0])):
+        if st.button("Send question", type="primary", disabled=(selected_sample == sample_queries[0])):
             st.session_state["queued_query"] = selected_sample
             st.rerun()
 
@@ -323,10 +302,8 @@ def render_chat_view(
                         public=not operator_mode,
                     )
                 elif msg.get("sources"):
-                    # Kompatibilitas dengan riwayat lama sebelum source_refs
-                    # disimpan secara terstruktur.
                     st.markdown(
-                        f'<div class="source-box"><strong>📚 Sumber Dokumen:</strong><br>{msg["sources"]}</div>',
+                        f'<div class="source-box"><strong>📚 Document Sources:</strong><br>{msg["sources"]}</div>',
                         unsafe_allow_html=True,
                     )
                 if operator_mode and msg.get("debug"):
@@ -337,7 +314,7 @@ def render_chat_view(
     if "queued_query" in st.session_state:
         input_query = st.session_state.pop("queued_query")
 
-    chat_input = st.chat_input("Ketik pertanyaan Anda di sini...")
+    chat_input = st.chat_input("Type your question here...")
     query = input_query or chat_input
 
     if query:
@@ -362,11 +339,11 @@ def _handle_query(
     if rate_limiter is not None:
         limit_result = rate_limiter.check_and_consume(st.session_state)
         if not limit_result.allowed:
-            menit = max(1, (limit_result.retry_after_seconds + 59) // 60)
+            minutes = max(1, (limit_result.retry_after_seconds + 59) // 60)
             st.warning(
-                f"Batas pertanyaan sementara tercapai "
-                f"({limit_result.limit} pertanyaan per jam). "
-                f"Silakan coba lagi sekitar {menit} menit lagi.",
+                f"Question rate limit reached "
+                f"({limit_result.limit} questions per hour). "
+                f"Please try again in about {minutes} minute(s).",
                 icon="⏳",
             )
             return
@@ -375,7 +352,7 @@ def _handle_query(
     with st.chat_message("user", avatar="🧑‍🎓"):
         st.markdown(query)
 
-    # Riwayat tanpa pertanyaan yang baru saja ditambahkan.
+    # Chat history excluding latest question
     chat_history = [
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state.messages[:-1]
@@ -383,9 +360,9 @@ def _handle_query(
 
     with st.chat_message("assistant", avatar="🎓"):
         spinner_text = (
-            "Menulis ulang pertanyaan lalu mencari dokumen..."
+            "Rewriting question and searching documents..."
             if config.use_query_rewrite and chat_history
-            else "Mencari potongan dokumen yang relevan..."
+            else "Searching relevant document excerpts..."
         )
 
         try:
@@ -400,18 +377,18 @@ def _handle_query(
                 st.error(f"⚠️ {error}")
             else:
                 st.error(
-                    "Layanan pencarian belum siap. Silakan hubungi administrator.",
+                    "Search service is not ready. Please contact administrator.",
                     icon="⚠️",
                 )
             st.session_state.messages.pop()
             return
         except Exception as error:
             if operator_mode:
-                st.error(f"⚠️ Gagal melakukan pencarian: {error}")
+                st.error(f"⚠️ Search failed: {error}")
             else:
                 st.error(
-                    "Layanan pencarian sedang mengalami gangguan. "
-                    "Silakan coba lagi nanti.",
+                    "Search service encountered an error. "
+                    "Please try again later.",
                     icon="⚠️",
                 )
             st.session_state.messages.pop()
@@ -421,7 +398,7 @@ def _handle_query(
 
         if outcome.was_rewritten and operator_mode:
             st.caption(
-                f"🔁 Pertanyaan ditulis ulang untuk pencarian: "
+                f"🔁 Question rewritten for search: "
                 f"*{outcome.effective_query}*"
             )
 
@@ -437,11 +414,23 @@ def _handle_query(
             })
             return
 
-        with st.spinner("Menyusun jawaban dari dokumen..."):
-            system_prompt, user_prompt = build_prompt(
-                outcome.original_query, outcome.contexts, chat_history
-            )
-            response = call_llm(user_prompt, system_instruction=system_prompt)
+        system_prompt, user_prompt = build_prompt(
+            outcome.original_query, outcome.contexts, chat_history
+        )
+        message_placeholder = st.empty()
+        full_response = ""
+
+        try:
+            for chunk in call_llm_stream(user_prompt, system_instruction=system_prompt):
+                full_response += chunk
+                live_text = strip_inline_source_lines(full_response)
+                message_placeholder.markdown(live_text + " ▌")
+        except Exception as error:
+            LOGGER.warning("Streaming error, fallback: %s", error)
+            if not full_response:
+                full_response = call_llm(user_prompt, system_instruction=system_prompt)
+
+        response = full_response
 
         context_pages = {
             page for context in outcome.contexts for page in context.page_numbers
@@ -449,32 +438,26 @@ def _handle_query(
         diagnostic = diagnose_answer(response, context_pages)
         if diagnostic is not None:
             diagnostic_code, diagnostic_detail = diagnostic
-            # Log only a safe category and page-number comparison. Do not log
-            # the provider response, prompt, API key, or user message.
             LOGGER.warning(
                 "answer_guard_rejected code=%s detail=%s",
                 diagnostic_code,
                 diagnostic_detail,
             )
-            # Circuit breaker public: provider yang mengabaikan prompt atau
-            # mengembalikan sitasi di luar konteks tidak boleh ditampilkan
-            # sebagai jawaban akademik.
             if operator_mode:
                 st.error(
-                    "Provider chat tidak mengembalikan jawaban dengan format "
-                    "akademik yang valid (sitasi halaman tidak ditemukan atau "
-                    "tidak cocok dengan konteks retrieval). Periksa provider."
+                    "Chat provider response failed validation (page citation missing "
+                    "or outside retrieval context). Review provider output."
                 )
                 st.caption(f"Diagnosis ({diagnostic_code}): {diagnostic_detail}")
             else:
                 st.warning(
-                    "Layanan AI belum mengembalikan jawaban dengan format yang "
-                    "valid. Silakan coba lagi nanti atau hubungi administrator.",
+                    "The AI service could not return a verified response. "
+                    "Please try again later or contact the administrator.",
                     icon="⚠️",
                 )
             response = (
-                "Maaf, layanan AI belum dapat menyusun jawaban yang dapat "
-                "diverifikasi. Silakan coba lagi nanti."
+                "I apologize, but the AI service could not produce a verified answer "
+                "at this time. Please try again later."
             )
 
         cited_pages = set(extract_cited_pages(response))
@@ -483,7 +466,7 @@ def _handle_query(
             cited_pages=cited_pages,
         )
         display_response = strip_inline_source_lines(response)
-        st.markdown(display_response)
+        message_placeholder.markdown(display_response)
 
         sources_text = format_sources(
             outcome.contexts,
@@ -511,44 +494,43 @@ def _handle_query(
 
 
 # ──────────────────────────────────────────────
-# View 2: Jelajah Dokumen
+# View 2: Document Explorer
 # ──────────────────────────────────────────────
 
 def render_document_explorer(retriever: DocumentRetriever | None) -> None:
-    st.header("Jelajah Dokumen & Index")
+    st.header("Document & Index Explorer")
     render_lead(
-        "Pemeriksaan struktur teks, chunk hasil tokenisasi, dan sebaran halaman "
-        "pada dokumen sumber."
+        "Inspect text structure, tokenized chunks, and page distributions "
+        "across indexed source documents."
     )
 
     if not retriever:
-        st.warning("Index belum tersedia.")
+        st.warning("Index is not available yet.")
         return
 
     info = retriever.document_info
     df = load_metadata_df()
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Chunk", f"{info.get('total_chunks', 0):,}")
-    col2.metric("Total Halaman", f"{info.get('total_pages', 0)}")
-    col3.metric("Rentang Halaman", f"Hal {info.get('page_range', '-')}")
+    col1.metric("Total Chunks", f"{info.get('total_chunks', 0):,}")
+    col2.metric("Total Pages", f"{info.get('total_pages', 0)}")
+    col3.metric("Page Range", f"p. {info.get('page_range', '-')}")
     col4.metric(
-        "Halaman per Chunk",
-        f"{info.get('avg_pages_per_chunk', 0)} rata-rata",
-        help="Semakin dekat ke 1, semakin presisi sitasi halaman yang bisa "
-             "diberikan chatbot. Nilai maksimum saat ini: "
-             f"{info.get('max_pages_per_chunk', 0)} halaman.",
+        "Pages per Chunk",
+        f"{info.get('avg_pages_per_chunk', 0)} avg",
+        help="Values closer to 1 ensure higher citation precision. "
+             f"Maximum page span: {info.get('max_pages_per_chunk', 0)} pages.",
     )
 
     documents = info.get("documents") or []
     if len(documents) > 1:
-        st.subheader("Dokumen dalam Index")
+        st.subheader("Documents in Index")
         st.dataframe(
             pd.DataFrame([
                 {
-                    "Dokumen": doc["name"],
-                    "Chunk": doc["chunks"],
-                    "Halaman": doc["pages"],
+                    "Document": doc["name"],
+                    "Chunks": doc["chunks"],
+                    "Pages": doc["pages"],
                 }
                 for doc in documents
             ]),
@@ -559,18 +541,17 @@ def render_document_explorer(retriever: DocumentRetriever | None) -> None:
     lexical = info.get("lexical") or {}
     if lexical:
         st.caption(
-            f"**Index leksikal BM25** — {lexical.get('documents', 0)} dokumen · "
-            f"{lexical.get('vocabulary', 0):,} istilah unik · "
-            f"rata-rata {lexical.get('avg_tokens_per_doc', 0)} token per chunk · "
+            f"**BM25 Lexical Index** — {lexical.get('documents', 0)} documents · "
+            f"{lexical.get('vocabulary', 0):,} unique terms · "
+            f"average {lexical.get('avg_tokens_per_doc', 0)} tokens per chunk · "
             f"k1={lexical.get('k1')}, b={lexical.get('b')}. "
-            "Dibangun di memori saat aplikasi dimuat, jadi tidak ada artefak "
-            "tambahan yang perlu disimpan."
+            "Constructed in-memory at application startup."
         )
 
-    st.subheader("Pencarian Isi Dokumen")
+    st.subheader("Search Document Content")
     search_term = st.text_input(
-        "Filter teks chunk",
-        placeholder="Contoh: skripsi, cuti, kurikulum, predikat...",
+        "Filter chunk text",
+        placeholder="Example: thesis, leave, curriculum, honors...",
     )
 
     display_df = df.copy()
@@ -581,7 +562,7 @@ def render_document_explorer(retriever: DocumentRetriever | None) -> None:
         display_df = display_df[haystack.str.contains(search_term, case=False, na=False)]
 
     if not display_df.empty:
-        st.caption(f"Menampilkan {min(len(display_df), 50)} dari {len(display_df)} chunk yang cocok")
+        st.caption(f"Displaying {min(len(display_df), 50)} of {len(display_df)} matching chunks")
         table_data = []
         for _, row in display_df.head(50).iterrows():
             pages = row.get("page_numbers") or []
@@ -598,66 +579,66 @@ def render_document_explorer(retriever: DocumentRetriever | None) -> None:
 
             entri = {
                 "Index": row.get("chunk_index"),
-                "Halaman": page_label,
-                "Bagian / Judul": heading,
-                "Karakter": row.get("char_count"),
-                "Cuplikan Teks": (row.get("text") or "")[:140] + "...",
+                "Page": page_label,
+                "Section / Title": heading,
+                "Characters": row.get("char_count"),
+                "Text Excerpt": (row.get("text") or "")[:140] + "...",
             }
             if len(documents) > 1:
-                nama = row.get("source_document") or "-"
-                entri = {"Dokumen": nama.rsplit(".", 1)[0][:28], **entri}
+                name = row.get("source_document") or "-"
+                entri = {"Document": name.rsplit(".", 1)[0][:28], **entri}
             table_data.append(entri)
         st.dataframe(pd.DataFrame(table_data), hide_index=True, width="stretch")
     else:
-        st.info("Tidak ada chunk yang cocok dengan filter pencarian.")
+        st.info("No chunks match the search filter.")
 
 
 # ──────────────────────────────────────────────
-# View 3: Uji Pertanyaan & Evaluasi
+# View 3: Evaluation
 # ──────────────────────────────────────────────
 
 def render_evaluation(retriever: DocumentRetriever | None) -> None:
-    st.header("Evaluasi Kualitas RAG")
+    st.header("RAG Quality Evaluation")
     render_lead(
-        "Uji ketepatan retrieval dan penolakan pertanyaan di luar cakupan dokumen."
+        "Evaluate retrieval precision and out-of-scope question refusal."
     )
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Target Recall@4", "≥ 80.0%")
     col2.metric("Refusal Accuracy", "100.0%")
-    col3.metric("Target Latency", "< 5.0 detik")
+    col3.metric("Target Latency", "< 5.0 s")
 
     questions = load_test_questions()
     if not questions:
-        st.info("File `eval/test_questions.json` tidak ditemukan.")
+        st.info("File `eval/test_questions.json` not found.")
         return
 
     in_scope = [q for q in questions if q.get("category") == "in_scope"]
     out_scope = [q for q in questions if q.get("category") == "out_of_scope"]
 
-    tab1, tab2 = st.tabs([f"In-Scope ({len(in_scope)} Pertanyaan)", f"Out-of-Scope ({len(out_scope)} Pertanyaan)"])
+    tab1, tab2 = st.tabs([f"In-Scope ({len(in_scope)} Questions)", f"Out-of-Scope ({len(out_scope)} Questions)"])
 
     with tab1:
-        st.caption("Pertanyaan yang jawabannya terdapat di dalam buku pedoman:")
+        st.caption("Questions whose answers exist within the academic guidelines:")
         in_data = [
             {
                 "ID": q["id"],
-                "Pertanyaan": q["question"],
-                "Keyword Wajib": ", ".join(q.get("expected_answer_contains", [])),
-                "Kategori": "In-Scope",
+                "Question": q["question"],
+                "Expected Keywords": ", ".join(q.get("expected_answer_contains", [])),
+                "Category": "In-Scope",
             }
             for q in in_scope
         ]
         st.dataframe(pd.DataFrame(in_data), hide_index=True)
 
     with tab2:
-        st.caption("Pertanyaan di luar dokumen yang wajib ditolak secara sopan (anti-halusinasi):")
+        st.caption("Out-of-scope questions that must be politely declined (anti-hallucination):")
         out_data = [
             {
                 "ID": q["id"],
-                "Pertanyaan": q["question"],
-                "Ekspektasi": "Ditolak / Informasi tidak ditemukan",
-                "Kategori": "Out-of-Scope",
+                "Question": q["question"],
+                "Expected Outcome": "Refused / Information not found",
+                "Category": "Out-of-Scope",
             }
             for q in out_scope
         ]
@@ -665,106 +646,92 @@ def render_evaluation(retriever: DocumentRetriever | None) -> None:
 
 
 # ──────────────────────────────────────────────
-# View 4: Tentang Proyek
+# View 4: About
 # ──────────────────────────────────────────────
 
 def render_about(retriever: DocumentRetriever | None) -> None:
-    st.header("Tentang Proyek")
+    st.header("About the Project")
     st.markdown(
         """
-        Proyek ini mengimplementasikan arsitektur **Retrieval-Augmented Generation (RAG)** untuk menjawab pertanyaan seputar kebijakan dan peraturan akademik **Universitas Atma Jaya Yogyakarta (UAJY)** secara akurat tanpa halusinasi.
+        This project implements a **Retrieval-Augmented Generation (RAG)** architecture to answer questions regarding campus academic policies and guidelines accurately and without hallucination.
 
-        **Batas Penggunaan & Disclaimer**
-        Aplikasi ini berfungsi sebagai asisten pencarian informasi edukatif. Informasi yang dihasilkan bersifat referensi akademik. Untuk keputusan administratif formal, mahasiswa tetap diwajibkan merujuk pada pengumuman resmi dan bagian administrasi akademik fakultas terkait.
+        **Terms of Use & Disclaimer**
+        This application serves as an educational reference assistant. Information provided is for academic guidance. For official administrative decisions, students must consult official faculty announcements and academic administration.
         """
     )
 
-    st.subheader("Pipeline Retrieval")
+    st.subheader("Retrieval Pipeline")
     st.markdown(
         """
-        Setiap pertanyaan melewati tahapan berikut:
+        Every user question passes through the following pipeline:
 
-        1. **Query rewriting** — pertanyaan lanjutan seperti *"berapa syaratnya?"* diubah
-           menjadi pertanyaan mandiri berdasarkan riwayat percakapan, **sebelum** pencarian
-           berjalan. Tanpa langkah ini, konteks yang salah sudah terambil sejak awal.
-        2. **Pencarian dua jalur** — *dense* (embedding Gemini + FAISS cosine) menangkap
-           kesamaan makna, *BM25 Okapi* menangkap kecocokan istilah eksak seperti
-           "IPK 3,50", "144 SKS", atau "Pasal 12".
-        3. **Reciprocal Rank Fusion** — kedua peringkat digabung memakai peringkat, bukan
-           skor mentah, sehingga cosine (0–1) dan BM25 (tak terbatas) bisa disatukan tanpa
-           normalisasi.
-        4. **Reranking** — model menilai ulang setiap kandidat dengan melihat pertanyaan dan
-           potongan dokumen bersamaan, menilai *kemampuan menjawab* alih-alih sekadar
-           kemiripan.
-        5. **Gate relevansi berlapis** — ambang kemiripan, cakupan istilah, skor reranker,
-           lalu instruksi sistem yang ketat. Pertanyaan di luar cakupan ditolak, bukan
-           dijawab dengan karangan.
+        1. **Query rewriting** — follow-up questions like *"what are the requirements?"* are converted
+           into standalone queries using conversation history, **before** search runs.
+        2. **Dual-branch retrieval** — *dense search* (Gemini embeddings + FAISS cosine similarity) captures
+           semantic meaning, while *BM25 Okapi* captures exact keyword matches such as "GPA 3.50", "144 credits", or "Article 12".
+        3. **Reciprocal Rank Fusion (RRF)** — ranks are merged by rank position rather than raw scores,
+           seamlessly joining bounded cosine (0–1) and unbounded BM25 scores.
+        4. **Reranking** — the cross-encoder LLM evaluates query and document excerpts together,
+           scoring *answerability* rather than mere lexical similarity.
+        5. **Multi-layer relevance gating** — similarity threshold, lexical term coverage, reranker score,
+           and strict system instructions ensure out-of-scope questions are politely refused.
         """
     )
 
-    st.subheader("Detail Konfigurasi & Stack")
+    st.subheader("Configuration & Technical Stack")
     info = retriever.document_info if retriever else {}
     index_info = info.get("index_info") or {}
     embedding_info = index_info.get("embedding") or {}
     lexical = info.get("lexical") or {}
 
-    # Menangani dua format: source_documents (multi-dokumen) dan source_pdf
-    # (dokumen tunggal, index versi lama).
     from app.index_status import indexed_documents
 
-    sumber = indexed_documents(index_info)
-    if len(sumber) > 1:
-        label_dokumen = f"{len(sumber)} dokumen: " + ", ".join(
-            d.get("name", "?").rsplit(".", 1)[0][:32] for d in sumber
+    sources = indexed_documents(index_info)
+    if len(sources) > 1:
+        label_documents = f"{len(sources)} documents: " + ", ".join(
+            d.get("name", "?").rsplit(".", 1)[0][:32] for d in sources
         )
-    elif sumber:
-        label_dokumen = sumber[0].get("name", "-")
+    elif sources:
+        label_documents = sources[0].get("name", "-")
     else:
-        label_dokumen = "Buku Pedoman Akademik FTI 2025-2026"
+        label_documents = "Academic Guidelines 2025-2026"
 
     dimension = embedding_info.get("dimension")
     embedding_label = f"Google {EMBEDDING_MODEL}"
     if dimension:
-        embedding_label += f" (dimensi {dimension})"
+        embedding_label += f" (dimension {dimension})"
 
     rows = [
-        ("Institusi", "Universitas Atma Jaya Yogyakarta (UAJY)"),
-        ("Dokumen Sumber", label_dokumen),
-        ("Model LLM Generation", f"Bandel AI · {effective_model(LLM_MODEL)} (via API)"),
-        ("Model Rerank & Rewrite", f"Bandel AI · {effective_model(UTILITY_MODEL)} (via API)"),
-        ("Model Embedding", embedding_label),
-        ("Task Type Embedding", embedding_info.get("task_type") or "generik (index lama)"),
+        ("Institution", "IIIT Naya Raipur (Dr. SPM IIIT-NR)"),
+        ("Source Documents", label_documents),
+        ("LLM Generation Model", f"Google Gemini · {effective_model(LLM_MODEL)} (via API)"),
+        ("Rerank & Rewrite Model", f"Google Gemini · {effective_model(UTILITY_MODEL)} (via API)"),
+        ("Embedding Model", embedding_label),
+        ("Embedding Task Type", embedding_info.get("task_type") or "generic"),
         ("Vector Store", "FAISS IndexFlatIP (cosine similarity)"),
-        ("Index Leksikal", f"BM25 Okapi in-memory, {lexical.get('vocabulary', 0):,} istilah unik"),
-        ("Total Chunk Terindex", f"{info.get('total_chunks', 0)} chunk"),
-        ("Total Halaman Sumber", f"{info.get('total_pages', 0)} halaman"),
+        ("Lexical Index", f"BM25 Okapi in-memory, {lexical.get('vocabulary', 0):,} unique terms"),
+        ("Total Indexed Chunks", f"{info.get('total_chunks', 0)} chunks"),
+        ("Total Source Pages", f"{info.get('total_pages', 0)} pages"),
         (
-            "Presisi Sitasi Halaman",
-            f"rata-rata {info.get('avg_pages_per_chunk', 0)} halaman per chunk "
-            f"(maksimum {info.get('max_pages_per_chunk', 0)})",
+            "Page Citation Precision",
+            f"average {info.get('avg_pages_per_chunk', 0)} pages per chunk "
+            f"(maximum {info.get('max_pages_per_chunk', 0)})",
         ),
-        ("Framework UI", "Streamlit"),
+        ("UI Framework", "Streamlit"),
         (
-            "Guardrail Halusinasi",
-            "Ambang kemiripan + cakupan istilah leksikal + gate reranker + system prompt ketat",
+            "Hallucination Guardrails",
+            "Similarity threshold + lexical coverage + reranker gate + strict system prompt",
         ),
     ]
 
     if index_info.get("built_at"):
-        rows.append(("Index Dibangun", index_info["built_at"]))
+        rows.append(("Index Built At", index_info["built_at"]))
 
     st.dataframe(
-        pd.DataFrame(rows, columns=["Komponen", "Spesifikasi / Nilai"]),
+        pd.DataFrame(rows, columns=["Component", "Specification / Value"]),
         hide_index=True,
         width="stretch",
     )
-
-    if not index_info:
-        st.info(
-            "Index ini dibangun sebelum pencatatan `index_info.json` ada. "
-            "Jalankan `python ingestion/build_index.py --yes` untuk membangun ulang "
-            "dengan chunking presisi halaman dan embedding yang menyertakan judul bagian."
-        )
 
 
 # ──────────────────────────────────────────────
@@ -778,91 +745,76 @@ def _operator_main_legacy() -> None:
     render_index_freshness(retriever)
 
     with st.sidebar:
-        render_brand("Chatbot Akademik", "Pedoman FTI UAJY 2025/2026")
+        render_brand("IIIT-NR Chatbot", "Academic & Campus Assistant")
 
-        nav_label("Navigasi")
+        nav_label("Navigation")
         page = st.radio(
-            "Navigasi",
-            ["Tanya Jawab", "Jelajah Dokumen", "Uji Pertanyaan", "Tentang"],
+            "Navigation",
+            ["Q&A Chat", "Document Explorer", "Evaluation", "About"],
             label_visibility="collapsed",
         )
 
         st.divider()
 
-        nav_label("Status Sistem")
+        nav_label("System Status")
         if retriever:
             render_status_badge(
                 "Vector Store",
-                f"● Index Aktif · {retriever.total_chunks} Chunk",
+                f"● Active Index · {retriever.total_chunks} Chunks",
                 online=True,
             )
         else:
-            render_status_badge("Vector Store", "● Index Belum Siap", online=False)
+            render_status_badge("Vector Store", "● Index Not Ready", online=False)
 
         # Settings
-        # Pemilih dokumen hanya muncul bila index memang memuat lebih dari
-        # satu dokumen, agar tidak menambah kendali yang tak berguna.
         selected_documents: tuple[str, ...] = ()
         if retriever:
             available = retriever.source_documents
             if len(available) > 1:
-                nav_label("Cakupan Dokumen")
+                nav_label("Document Scope")
                 chosen = st.multiselect(
-                    "Cari hanya di dokumen berikut",
+                    "Search only in selected documents",
                     options=available,
                     default=available,
                     format_func=lambda name: name.rsplit(".", 1)[0][:42],
-                    help="Kosongkan untuk mencari di seluruh dokumen.",
+                    help="Leave empty to search all documents.",
                 )
-                # Memilih semuanya sama artinya dengan tanpa filter, jadi
-                # jangan bebani pipeline dengan penyaringan yang sia-sia.
                 if chosen and len(chosen) < len(available):
                     selected_documents = tuple(chosen)
 
-        nav_label("Pipeline Retrieval")
+        nav_label("Retrieval Pipeline")
         use_hybrid = st.toggle(
             "Hybrid search (BM25 + dense)",
             value=DEFAULT_RETRIEVAL_CONFIG.use_hybrid,
-            help="Menggabungkan pencarian makna (embedding) dengan pencocokan "
-                 "istilah eksak (BM25) memakai Reciprocal Rank Fusion. Membantu "
-                 "pertanyaan yang memuat angka atau nomor pasal.",
+            help="Combines semantic embedding search with exact keyword matching (BM25) using Reciprocal Rank Fusion.",
         )
         use_rerank = st.toggle(
-            "Reranker LLM",
+            "LLM Reranker",
             value=DEFAULT_RETRIEVAL_CONFIG.use_rerank,
-            help="Menilai ulang kandidat dengan melihat pertanyaan dan potongan "
-                 "dokumen bersamaan. Menambah satu panggilan API per pertanyaan, "
-                 "tetapi menaikkan presisi dan menjadi penjaga utama terhadap "
-                 "pertanyaan di luar cakupan.",
+            help="Evaluates candidate excerpts against the question simultaneously using cross-encoder scoring.",
         )
         if not use_rerank:
-            # Pengukuran menunjukkan reranker adalah satu-satunya tahap yang
-            # mampu menolak pertanyaan di luar cakupan pada index ini, karena
-            # cosine similarity in-scope dan out-of-scope saling tumpang tindih.
             st.warning(
-                "Tanpa reranker, penolakan pertanyaan di luar cakupan turun ke "
-                "**0%** di tingkat retrieval. Jawaban masih dijaga oleh system "
-                "prompt, tetapi konteks yang tidak relevan bisa ikut terkirim.",
+                "Without the reranker, out-of-scope question refusal drops at retrieval level. "
+                "Answers are still protected by system prompt, but irrelevant context may be included.",
                 icon="⚠️",
             )
         use_rewrite = st.toggle(
             "Query rewriting",
             value=DEFAULT_RETRIEVAL_CONFIG.use_query_rewrite,
-            help="Mengubah pertanyaan lanjutan menjadi pertanyaan mandiri sebelum "
-                 "pencarian. Hanya aktif bila pertanyaan terdeteksi bergantung pada "
-                 "riwayat percakapan.",
+            help="Rewrites follow-up questions into standalone queries before retrieval.",
         )
 
-        nav_label("Parameter Retrieval")
+        nav_label("Retrieval Parameters")
         top_k = st.slider(
-            "Top-K Konteks", min_value=1, max_value=8,
+            "Top-K Context Chunks", min_value=1, max_value=8,
             value=DEFAULT_RETRIEVAL_CONFIG.top_k,
-            help="Jumlah chunk yang dikirim ke LLM sebagai konteks",
+            help="Number of document chunks sent to LLM as context",
         )
         threshold = st.slider(
-            "Ambang Relevansi", min_value=0.1, max_value=0.8,
+            "Relevance Threshold", min_value=0.1, max_value=0.8,
             value=DEFAULT_RETRIEVAL_CONFIG.dense_threshold, step=0.05,
-            help="Cosine similarity minimum agar jalur dense dianggap menemukan konteks",
+            help="Minimum cosine similarity for dense retrieval branch",
         )
 
         config = DEFAULT_RETRIEVAL_CONFIG.with_overrides(
@@ -875,55 +827,41 @@ def _operator_main_legacy() -> None:
         )
 
         st.divider()
-        if st.button("🗑️ Bersihkan Percakapan"):
+        if st.button("🗑️ Clear Conversation"):
             st.session_state.messages = []
             st.rerun()
 
-        # Tampilkan model yang benar-benar dipakai. Bila model utama sudah
-        # dihapus penyedianya, rantai fallback berpindah diam-diam dan caption
-        # ini yang memberi tahu bahwa yang berjalan bukan lagi konfigurasi awal.
         st.caption(
-            f"Jawaban: {effective_model(LLM_MODEL)} · "
+            f"Generation: {effective_model(LLM_MODEL)} · "
             f"Rerank/rewrite: {effective_model(UTILITY_MODEL)}"
         )
 
-    if page == "Tanya Jawab":
+    if page == "Q&A Chat":
         render_chat_view(retriever, config, operator_mode=True)
-    elif page == "Jelajah Dokumen":
+    elif page == "Document Explorer":
         render_document_explorer(retriever)
-    elif page == "Uji Pertanyaan":
+    elif page == "Evaluation":
         render_evaluation(retriever)
     else:
         render_about(retriever)
 
     st.divider()
     render_footer(
-        "Chatbot Akademik · Fakultas Teknologi Industri "
-        "Universitas Atma Jaya Yogyakarta"
+        "IIIT-NR Academic & Campus RAG Chatbot"
     )
 
 
-# Entry point publik didefinisikan di bawah fungsi operator legacy. Mode public
-# adalah default agar deploy VPS aman walaupun APP_MODE lupa dikonfigurasi.
-
-
-
 def main() -> None:
-    """Jalankan aplikasi dalam mode public atau operator."""
+    """Run application in public or operator mode."""
     operator_mode = is_operator_mode()
 
     if operator_mode:
-        # Panel lama lengkap untuk admin/pengembang. Mode ini hanya dibuka
-        # dengan APP_MODE=operator di server internal.
         _operator_main_legacy()
         return
 
     render_hero()
     retriever, error = load_retriever()
 
-    # Public mode: mahasiswa hanya melihat layanan Tanya Jawab. Tidak ada
-    # slider, toggle pipeline, explorer, evaluasi, jumlah chunk, skor internal,
-    # atau nama model provider.
     limiter = SessionRateLimiter(
         limit=public_rate_limit(),
         window_seconds=public_rate_window_seconds(),
@@ -931,17 +869,16 @@ def main() -> None:
     config = DEFAULT_RETRIEVAL_CONFIG
 
     with st.sidebar:
-        render_brand("Chatbot Akademik", "Layanan Informasi FTI UAJY")
-        nav_label("Layanan Mahasiswa")
+        render_brand("IIIT-NR Chatbot", "Academic & Campus Services")
+        nav_label("Student Services")
         st.caption(
-            "Tanyakan informasi akademik berdasarkan dokumen resmi Fakultas "
-            "Teknologi Industri UAJY."
+            "Ask academic, faculty, curriculum, and campus questions based on official IIIT-NR documents."
         )
         st.divider()
-        if st.button("🗑️ Bersihkan Percakapan", use_container_width=True):
+        if st.button("🗑️ Clear Conversation", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
-        st.caption("Gunakan informasi ini sebagai panduan. Untuk keputusan resmi, hubungi bagian akademik.")
+        st.caption("Use this information as guidance. For official administrative decisions, please consult academic administration.")
 
     render_chat_view(
         retriever,
@@ -952,8 +889,7 @@ def main() -> None:
 
     st.divider()
     render_footer(
-        "Chatbot Akademik · Fakultas Teknologi Industri "
-        "Universitas Atma Jaya Yogyakarta"
+        "IIIT-NR Academic & Campus RAG Chatbot"
     )
 
 
