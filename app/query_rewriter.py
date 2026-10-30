@@ -49,29 +49,35 @@ _HISTORY_WINDOW = 6
 _HISTORY_MESSAGE_CHAR_LIMIT = 400
 
 REWRITE_SYSTEM_PROMPT = """You are a query rewriting component in an academic document search system.
+The academic source documents in the database are written in English.
 
-Your task: rewrite the user's latest question into a STANDALONE question that can be understood without reading conversation history.
-
-Rules:
-1. Replace reference words ("it", "they", "that", "this", "its", "their") with the referenced entity from the conversation history.
-2. Maintain the original intent. DO NOT add new conditions, constraints, or topics.
-3. Retain all specific terms and numbers from the original question.
-4. If the latest question is already standalone, return it AS IS without modification.
-5. Use English.
-6. Reply ONLY with the single standalone rewritten question. No explanations, no quotation marks, no prefixes."""
+Your task:
+1. If the user's question contains Hindi or Devanagari, translate the core question into a clear, standalone English search question.
+2. If the user refers to prior conversation ("it", "they", "he", "she", "that", "this"), replace references with the specific entity from conversation history.
+3. Return a STANDALONE ENGLISH question that can be directly searched against the English academic documents.
+4. Reply ONLY with the single standalone English question. No explanations, no quotation marks, no prefixes."""
 
 
 def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
     """
     Determine whether a query needs rewriting, without calling an LLM.
 
-    True if conversation history exists AND the question appears context-dependent:
-    very short, or contains referential markers.
+    True if:
+    - The query contains Hindi / Devanagari characters (needs English translation for retrieval).
+    - Conversation history exists AND the question appears context-dependent (short or referential).
 
     Args:
         query: User's latest question.
         chat_history: Prior conversation history.
     """
+    stripped = query.strip()
+    if not stripped:
+        return False
+
+    # Any Devanagari (Hindi) text needs rewriting into English search query
+    if re.search(r"[\u0900-\u097F]", stripped):
+        return True
+
     if not chat_history:
         return False
 
@@ -79,18 +85,10 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
     if not any(msg.get("role") == "assistant" for msg in chat_history):
         return False
 
-    stripped = query.strip()
-    if not stripped:
-        return False
-
     if len(stripped.split()) <= _SHORT_QUERY_WORD_LIMIT:
         return True
 
     lowered = stripped.lower()
-
-    # Possessive suffix "-nya" in Indonesian
-    if re.search(r"\w{3,}nya\b", lowered):
-        return True
 
     return any(
         re.search(rf"\b{re.escape(marker)}\b", lowered)

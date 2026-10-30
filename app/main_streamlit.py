@@ -8,12 +8,18 @@ Style definitions are maintained in `app/theme.py`.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
-import sys
 from pathlib import Path
+import queue
+import re
+import sys
+import threading
+import uuid
 
 import pandas as pd
+import requests
 import streamlit as st
 
 # Add project root to sys.path
@@ -105,6 +111,162 @@ def load_test_questions() -> list[dict]:
         return []
     with open(eval_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+@st.cache_data(show_spinner=False)
+def fetch_tts_audio(text: str, voice: str = "Female") -> bytes | None:
+    """Fetch synthesized speech from local GPU TTS microservice."""
+    try:
+        resp = requests.post(
+            "http://127.0.0.1:8000/synthesize",
+            json={"text": text, "voice": voice},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            return resp.content
+    except Exception as e:
+        LOGGER.debug("TTS microservice call failed: %s", e)
+    return None
+
+
+def render_streaming_tts_player(session_id: str) -> None:
+    """Embed Web Audio API real-time queue player connected via WebSocket to local GPU TTS server."""
+    html_code = f"""
+    <div id="tts-player-box" style="
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      margin: 6px 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      color: #166534;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    ">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span id="tts-icon" style="font-size: 16px;">🔊</span>
+        <span id="tts-status" style="font-weight: 500;">Streaming voice on GPU...</span>
+      </div>
+      <button id="tts-btn" onclick="toggleAudio()" style="
+        background: #16a34a;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-size: 12px;
+      ">🔊 Playing</button>
+    </div>
+
+    <script>
+    (function() {{
+      const sessionId = "{session_id}";
+      const wsUrl = "ws://127.0.0.1:8000/ws_audio/" + sessionId;
+      let audioCtx = null;
+      let nextStartTime = 0;
+      let ws = null;
+      let sentenceCount = 0;
+
+      function getAudioContext() {{
+        if (!audioCtx) {{
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {{
+            audioCtx = new AudioContextClass();
+          }}
+        }}
+        if (audioCtx && audioCtx.state === 'suspended') {{
+          audioCtx.resume();
+        }}
+        return audioCtx;
+      }}
+
+      getAudioContext();
+
+      window.toggleAudio = function() {{
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const btn = document.getElementById('tts-btn');
+        if (ctx.state === 'running') {{
+          ctx.suspend();
+          if (btn) {{
+            btn.innerText = "▶️ Resume";
+            btn.style.background = "#ca8a04";
+          }}
+        }} else {{
+          ctx.resume();
+          if (btn) {{
+            btn.innerText = "🔊 Playing";
+            btn.style.background = "#16a34a";
+          }}
+        }}
+      }};
+
+      try {{
+        ws = new WebSocket(wsUrl);
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = function() {{
+          const el = document.getElementById('tts-status');
+          if (el) el.innerText = "Listening to live voice stream...";
+        }};
+
+        ws.onmessage = async function(e) {{
+          const ctx = getAudioContext();
+          if (typeof e.data === 'string') {{
+            try {{
+              const meta = JSON.parse(e.data);
+              if (meta.type === 'chunk_meta') {{
+                sentenceCount++;
+                const el = document.getElementById('tts-status');
+                if (el) {{
+                  const snippet = meta.text.length > 45 ? meta.text.substring(0, 45) + '...' : meta.text;
+                  el.innerText = 'Sentence ' + sentenceCount + ': ' + snippet;
+                }}
+              }} else if (meta.type === 'done') {{
+                const delayMs = ctx ? Math.max(0, (nextStartTime - ctx.currentTime) * 1000) : 1000;
+                setTimeout(() => {{
+                  const el = document.getElementById('tts-status');
+                  if (el) el.innerText = 'Voice narration complete (' + sentenceCount + ' sentences)';
+                  const btn = document.getElementById('tts-btn');
+                  if (btn) {{
+                    btn.innerText = "✓ Done";
+                    btn.style.background = "#64748b";
+                  }}
+                }}, delayMs);
+              }}
+            }} catch (err) {{}}
+          }} else if (e.data instanceof ArrayBuffer && ctx) {{
+            try {{
+              if (ctx.state === 'suspended') {{
+                await ctx.resume();
+              }}
+              const audioBuffer = await ctx.decodeAudioData(e.data);
+              const source = ctx.createBufferSource();
+              source.buffer = audioBuffer;
+              source.connect(ctx.destination);
+              
+              const startTime = Math.max(ctx.currentTime, nextStartTime);
+              source.start(startTime);
+              nextStartTime = startTime + audioBuffer.duration;
+            }} catch (err) {{
+              console.error("Audio decode error:", err);
+            }}
+          }}
+        }};
+
+        ws.onerror = function(err) {{
+          const el = document.getElementById('tts-status');
+          if (el) el.innerText = "Voice stream offline";
+        }};
+      }} catch (err) {{
+        console.warn("WebSocket init error:", err);
+      }}
+    }})();
+    </script>
+    """
+    st.components.v1.html(html_code, height=52)
 
 
 # ──────────────────────────────────────────────
@@ -295,6 +457,8 @@ def render_chat_view(
         with st.chat_message(msg["role"], avatar="🧑‍🎓" if msg["role"] == "user" else "🎓"):
             st.markdown(msg["content"])
             if msg["role"] == "assistant":
+                if msg.get("audio"):
+                    st.audio(msg["audio"], format="audio/wav")
                 if msg.get("source_refs"):
                     render_source_references(
                         msg["source_refs"],
@@ -417,20 +581,92 @@ def _handle_query(
         system_prompt, user_prompt = build_prompt(
             outcome.original_query, outcome.contexts, chat_history
         )
+
+        enable_tts = st.session_state.get("enable_tts", True)
+        voice_gender = st.session_state.get("voice_gender", "Female")
+        session_id = uuid.uuid4().hex if enable_tts else None
+
+        # Render live streaming audio player widget
+        audio_placeholder = st.empty()
+        if enable_tts and session_id:
+            with audio_placeholder:
+                render_streaming_tts_player(session_id)
+
+        # Background sentence sender queue to ensure 0ms blocking on LLM token stream
+        tts_sentence_queue = queue.Queue()
+        tts_sentinel = object()
+
+        def background_tts_sender():
+            while True:
+                item = tts_sentence_queue.get()
+                if item is tts_sentinel:
+                    break
+                try:
+                    requests.post(
+                        "http://127.0.0.1:8000/stream_sentence",
+                        json={"session_id": session_id, "text": item, "voice": voice_gender},
+                        timeout=5,
+                    )
+                except Exception:
+                    pass
+                tts_sentence_queue.task_done()
+
+        if enable_tts and session_id:
+            sender_thread = threading.Thread(target=background_tts_sender, daemon=True)
+            sender_thread.start()
+
         message_placeholder = st.empty()
         full_response = ""
+        sentence_buffer = ""
+        # Only split on genuine sentence endings in Hindi (Danda ।, question mark ?, exclamation !, newline \n)
+        # Excludes period (.) so abbreviations like डॉ., पी.एच.डी., एम.टेक. are not fragmented
+        sentence_delimiter = re.compile(r'([।?!\n])')
 
         try:
             for chunk in call_llm_stream(user_prompt, system_instruction=system_prompt):
                 full_response += chunk
                 live_text = strip_inline_source_lines(full_response)
                 message_placeholder.markdown(live_text + " ▌")
+
+                # Concurrently push completed sentences to background queue
+                if enable_tts and session_id:
+                    sentence_buffer += chunk
+                    parts = sentence_delimiter.split(sentence_buffer)
+                    if len(parts) > 1:
+                        completed_sentence = "".join(parts[:-1]).strip()
+                        if completed_sentence and len(completed_sentence.split()) >= 3:
+                            tts_sentence_queue.put(completed_sentence)
+                            sentence_buffer = parts[-1]
+
+            # Flush any remaining sentence buffer
+            if enable_tts and session_id and sentence_buffer.strip():
+                tts_sentence_queue.put(sentence_buffer.strip())
+
         except Exception as error:
             LOGGER.warning("Streaming error, fallback: %s", error)
             if not full_response:
                 full_response = call_llm(user_prompt, system_instruction=system_prompt)
 
+        if enable_tts and session_id:
+            tts_sentence_queue.put(tts_sentinel)
+
         response = full_response
+
+        # Finish streaming TTS session and retrieve full audio for history replay
+        audio_data = None
+        if enable_tts and session_id:
+            try:
+                res = requests.post(
+                    "http://127.0.0.1:8000/stream_finish",
+                    json={"session_id": session_id},
+                    timeout=10,
+                )
+                if res.status_code == 200:
+                    b64_audio = res.json().get("audio_base64")
+                    if b64_audio:
+                        audio_data = base64.b64decode(b64_audio)
+            except Exception:
+                pass
 
         context_pages = {
             page for context in outcome.contexts for page in context.page_numbers
@@ -468,6 +704,10 @@ def _handle_query(
         display_response = strip_inline_source_lines(response)
         message_placeholder.markdown(display_response)
 
+        # Fallback if streaming audio was not captured
+        if enable_tts and not audio_data and display_response:
+            audio_data = fetch_tts_audio(display_response, voice=voice_gender)
+
         sources_text = format_sources(
             outcome.contexts,
             cited_pages=cited_pages,
@@ -486,6 +726,7 @@ def _handle_query(
         st.session_state.messages.append({
             "role": "assistant",
             "content": display_response,
+            "audio": audio_data,
             "sources": sources_text,
             "source_refs": source_refs,
             "message_id": len(st.session_state.messages),
@@ -826,6 +1067,12 @@ def _operator_main_legacy() -> None:
             document_filter=selected_documents,
         )
 
+        nav_label("Voice Narration (GPU TTS)")
+        enable_tts = st.toggle("🔊 Enable Voice Output", value=True, help="Synthesizes Hindi speech via local GPU VITS TTS")
+        voice_gender = st.selectbox("Voice", ["Female", "Male"], index=0, key="operator_voice")
+        st.session_state["enable_tts"] = enable_tts
+        st.session_state["voice_gender"] = voice_gender
+
         st.divider()
         if st.button("🗑️ Clear Conversation"):
             st.session_state.messages = []
@@ -874,6 +1121,12 @@ def main() -> None:
         st.caption(
             "Ask academic, faculty, curriculum, and campus questions based on official IIIT-NR documents."
         )
+        nav_label("Voice Narration (GPU TTS)")
+        enable_tts = st.toggle("🔊 Hindi Voice Output", value=True, help="Synthesizes Hindi speech via local GPU VITS TTS")
+        voice_gender = st.selectbox("Voice", ["Female", "Male"], index=0, key="public_voice")
+        st.session_state["enable_tts"] = enable_tts
+        st.session_state["voice_gender"] = voice_gender
+
         st.divider()
         if st.button("🗑️ Clear Conversation", use_container_width=True):
             st.session_state.messages = []

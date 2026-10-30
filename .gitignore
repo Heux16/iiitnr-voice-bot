@@ -28,3 +28,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Audio files
+*.wav
+
+# Large model checkpoint weights (>100MB blocked by GitHub)
+*.pth
+*.pt
+*.bin
