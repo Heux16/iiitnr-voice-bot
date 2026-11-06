@@ -179,7 +179,8 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | `app/main_streamlit.py`         | Main frontend UI, chat loop, voice recording widget (`st.audio_input`), Web Audio player embedding, and background queue. | `uajy-rag`  |
 | `app/prompt_builder.py`         | LLM prompt with strict Hindi output, number-to-words rule, and page citations.                                            | `uajy-rag`  |
-| `app/query_rewriter.py`         | Translates Hindi/Chhattisgarhi questions into English search queries for FAISS/BM25.                                      | `uajy-rag`  |
+| `app/query_rewriter.py`         | Cross-lingual query rewriter (Chhattisgarhi, Hindi, Hinglish -> English search query with few-shots and Indic detection). | `uajy-rag`  |
+| `app/retrieval.py`              | Hybrid retriever (FAISS + BM25 + RRF) with Turn 1 cross-lingual rewrite triggers.                                        | `uajy-rag`  |
 | `TTS/tts_server.py`             | FastAPI microservice for GPU VITS synthesis and WebSocket audio queueing (Port 8000).                                     | `minor1`    |
 | `STT/stt-service/run.py`        | Entry point for STT FastAPI server (Port 8001).                                                                           | `minor1`    |
 | `STT/stt-service/src/asr.py`    | Multilingual ASR abstraction (Faster-Whisper Turbo + Meta MMS 1B Chhattisgarhi).                                          | `minor1`    |
@@ -189,12 +190,24 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
 
 ---
 
-## 6. Verification & Automated Test Commands
+## 6. Git Remote & Repository Setup
+
+The primary git remote has been configured for the dedicated IIIT-NR Voice Bot repository:
+- **Primary Remote (`origin`)**: `https://github.com/Heux16/iiitnr-voice-bot.git` (Branch: `main`)
+- **Legacy Backup Remote (`uajy-origin`)**: `https://github.com/Heux16/uajy-academic-rag-chatbot.git`
+- **Push Instruction**: Once the repo `iiitnr-voice-bot` is created on GitHub, publish local commits via:
+  ```powershell
+  git push -u origin main
+  ```
+
+---
+
+## 7. Verification & Automated Test Commands
 
 To verify that the entire codebase remains intact:
 
 ```powershell
-# 1. Run all 459 core RAG unit tests
+# 1. Run all 479 core RAG & cross-lingual query rewriter unit tests
 Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
 & "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -m pytest tests/ -q
 
