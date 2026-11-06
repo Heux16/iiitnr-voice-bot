@@ -657,6 +657,17 @@ def _handle_query(
 
         debug = outcome_to_debug(outcome)
 
+        from app.prompt_builder import detect_query_language
+        detected_lang = detect_query_language(outcome.original_query)
+
+        if operator_mode:
+            lang_labels = {
+                "hne": "🌾 छत्तीसगढ़ी (Chhattisgarhi)",
+                "hi": "🇮🇳 हिन्दी (Hindi)",
+                "en": "🇬🇧 English",
+            }
+            st.caption(f"🌐 Language: **{lang_labels.get(detected_lang, detected_lang)}**")
+
         if outcome.was_rewritten and operator_mode:
             st.caption(
                 f"🔁 Question rewritten for search: "
@@ -664,7 +675,7 @@ def _handle_query(
             )
 
         if outcome.refused:
-            response = build_no_context_response()
+            response = build_no_context_response(language=detected_lang)
             st.markdown(response)
             if operator_mode:
                 render_retrieval_debug(debug)
@@ -676,7 +687,7 @@ def _handle_query(
             return
 
         system_prompt, user_prompt = build_prompt(
-            outcome.original_query, outcome.contexts, chat_history
+            outcome.original_query, outcome.contexts, chat_history, target_language=detected_lang
         )
 
         enable_tts = st.session_state.get("enable_tts", True)
