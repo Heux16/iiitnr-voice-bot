@@ -7,6 +7,7 @@ import pytest
 from app.query_rewriter import (
     _sanitize,
     build_rewrite_prompt,
+    is_indic_or_hinglish,
     needs_rewrite,
     rewrite_query,
 )
@@ -61,6 +62,50 @@ class TestNeedsRewrite:
         assert needs_rewrite("", history) is False
         assert needs_rewrite("   ", history) is False
 
+    @pytest.mark.parametrize("query", [
+        "सीएसई की ओपनिंग रैंक क्या है?",
+        "होस्टल के फीस कतेक लागही?",
+        "सीएसई म एडमिशन कइसे मिलही?",
+        "छात्रवृत्ति बर का नियम हावे?",
+    ])
+    def test_devanagari_perlu_tanpa_riwayat(self, query):
+        """Devanagari Hindi and Chhattisgarhi must trigger rewrite on Turn 1."""
+        assert needs_rewrite(query, None) is True
+        assert needs_rewrite(query, []) is True
+
+    @pytest.mark.parametrize("query", [
+        "CSE ki opening rank kya hai",
+        "Hostel ki fees kitni hai",
+        "MTech me admission kaise milega",
+        "Scholarship ke liye eligibility criteria kya hai",
+        "Placement kaisa hai CSE ka",
+    ])
+    def test_hinglish_perlu_tanpa_riwayat(self, query):
+        """Hinglish must trigger rewrite on Turn 1 so search gets English query."""
+        assert needs_rewrite(query, None) is True
+        assert needs_rewrite(query, []) is True
+
+    @pytest.mark.parametrize("query", [
+        "Okhar fees katek hawe",
+        "cse me admission kaise milhi",
+        "hostel kisan hawe",
+        "branch sliding bar kaabar niyam hawe",
+    ])
+    def test_chhattisgarhi_perlu_tanpa_riwayat(self, query):
+        """Romanized Chhattisgarhi must trigger rewrite on Turn 1."""
+        assert needs_rewrite(query, None) is True
+        assert needs_rewrite(query, []) is True
+
+    @pytest.mark.parametrize("query", [
+        "Iska cutoff kitna gaya tha?",
+        "Okhar eligibility batawa",
+        "Aur hostel charge kitna lagega?",
+        "Usme scholarship milegi?",
+    ])
+    def test_kata_rujukan_indic_perlu_ditulis_ulang(self, query, history):
+        """Indic referential follow-ups must be rewritten."""
+        assert needs_rewrite(query, history) is True
+
 
 class TestBuildRewritePrompt:
     def test_memuat_riwayat_dan_pertanyaan(self, history):
@@ -101,6 +146,14 @@ class TestSanitize:
     def test_awalan_dibuang(self):
         assert _sanitize("Standalone question: What is the maximum leave?", "original") == \
                "What is the maximum leave?"
+        assert _sanitize("Standalone English Question: What is the cutoff?", "original") == \
+               "What is the cutoff?"
+        assert _sanitize("Rewritten query: What are the fees?", "original") == \
+               "What are the fees?"
+
+    def test_markdown_bold_dibuang(self):
+        assert _sanitize("**What is the cutoff rank for CSE?**", "original") == \
+               "What is the cutoff rank for CSE?"
 
     def test_hanya_baris_pertama_dipakai(self):
         hasil = _sanitize("What is the maximum leave?\nAdditional explanation.", "original")
@@ -149,3 +202,19 @@ class TestRewriteQuery:
 
     def test_tanpa_riwayat_mengembalikan_apa_adanya(self):
         assert rewrite_query("What is the maximum?", None) == "What is the maximum?"
+
+    def test_hinglish_turn_1_diterjemahkan_tanpa_riwayat(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.query_rewriter.call_utility_llm",
+            lambda *a, **k: "What is the opening rank for B.Tech Computer Science and Engineering?",
+        )
+        hasil = rewrite_query("CSE ki opening rank kya hai", None)
+        assert hasil == "What is the opening rank for B.Tech Computer Science and Engineering?"
+
+    def test_devanagari_turn_1_diterjemahkan_tanpa_riwayat(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.query_rewriter.call_utility_llm",
+            lambda *a, **k: "What is the fee structure for hostel accommodation?",
+        )
+        hasil = rewrite_query("होस्टल के फीस कतेक लागही?", None)
+        assert hasil == "What is the fee structure for hostel accommodation?"

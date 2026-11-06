@@ -548,10 +548,13 @@ class HybridRetriever:
         api_key: str | None,
         timings: dict[str, float],
     ) -> tuple[str, bool]:
-        if not (cfg.use_query_rewrite and chat_history):
+        if not cfg.use_query_rewrite:
             return query, False
 
-        from app.query_rewriter import rewrite_query
+        from app.query_rewriter import needs_rewrite, rewrite_query
+
+        if not needs_rewrite(query, chat_history):
+            return query, False
 
         started = time.perf_counter()
         rewritten = rewrite_query(query, chat_history, api_key=api_key)

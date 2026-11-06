@@ -619,9 +619,10 @@ def _handle_query(
     ]
 
     with st.chat_message("assistant", avatar="🎓"):
+        from app.query_rewriter import needs_rewrite
         spinner_text = (
-            "Rewriting question and searching documents..."
-            if config.use_query_rewrite and chat_history
+            "Translating/Rewriting question and searching documents..."
+            if config.use_query_rewrite and needs_rewrite(query, chat_history)
             else "Searching relevant document excerpts..."
         )
 

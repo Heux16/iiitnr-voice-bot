@@ -27,17 +27,57 @@ from app.llm_client import call_utility_llm
 
 #: Indicators that a question refers to something mentioned previously.
 _REFERENTIAL_MARKERS = (
+    # English referential pronouns and anaphora
     "it", "they", "them", "that", "this", "these", "those", "their", "his", "her", "its",
     "the former", "the latter", "previous", "earlier", "above",
     "how about", "what about", "then", "next", "also", "besides",
     "how long", "why", "is that so", "for example", "details", "difference",
-    # Legacy Indonesian markers
+    # Hindi / Hinglish referential markers
+    "iska", "iski", "iske", "uska", "uski", "uske", "inka", "inki", "inke", "unka", "unki", "unke",
+    "ye", "yeh", "wo", "woh", "wahan", "yahan", "idhar", "udhar",
+    "aur", "aur bhi", "aur batao", "dusra", "agla", "pichla",
+    "phir", "fir", "usme", "isme", "unme", "inme", "isse", "usse",
+    # Chhattisgarhi referential markers
+    "okhar", "ekhar", "oman", "eman", "tahar", "hamar", "aau", "baare",
+    # Devanagari referential markers
+    "इसका", "इसकी", "इसके", "उसका", "उसकी", "उसके", "इनका", "उनकी", "उनके",
+    "यह", "वह", "ये", "वो", "वहाँ", "यहाँ", "और", "भी", "दूसरा", "अगला", "पिछला",
+    "फिर", "उसमें", "इसमें", "ओखर", "एखर", "ओमन", "एमन", "अउ", "बारे",
+    # Upstream Indonesian markers (retained for backward compatibility)
     "itu", "tersebut", "tadi", "sebelumnya", "yang mana", "kalau",
     "bagaimana dengan", "gimana dengan", "terus", "lalu", "kemudian",
     "dia", "mereka", "nya", "ini", "begitu", "sama seperti",
     "berapa lama", "kenapa", "mengapa", "apakah begitu", "selain itu",
     "contohnya", "misalnya", "detailnya", "lengkapnya", "bedanya",
 )
+
+#: Strong Indic and Chhattisgarhi question/predicate words in Roman script.
+#: The presence of even ONE of these words strongly indicates Hinglish or Romanized Chhattisgarhi.
+_STRONG_INDIC_WORDS = frozenset({
+    # Interrogatives (Hindi / Chhattisgarhi)
+    "kya", "kyu", "kyon", "kaise", "kaisa", "kaisi", "kaisan", "kisan", "kitna", "kitni", "kitne",
+    "kahan", "kaha", "kab", "kisko", "kiska", "kiski", "kiske", "kaun", "kaunsa", "kaunsi",
+    "katek", "kaabar", "kabar", "kon", "konse",
+    # Dialect / auxiliary predicates
+    "hawe", "heve", "laghi", "milhi", "jaahi", "aahi", "rahithan", "rahithe",
+    "batao", "bataiye", "batawa", "bataw", "batado",
+    "chahiye", "milega", "milegi", "milenge",
+    "hoga", "hogi", "honge",
+    # Dialect pronouns
+    "okhar", "ekhar", "oman", "eman",
+})
+
+#: Moderate Indic connectors/pronouns in Roman script.
+#: Requires at least TWO matches (or combination with question) to avoid false positives.
+_MODERATE_INDIC_WORDS = frozenset({
+    "hai", "hain", "tha", "thi", "the", "liye", "bhi", "aur", "iska", "iski", "iske",
+    "uska", "uski", "uske", "inka", "inki", "inke", "unka", "unki", "unke",
+    "wahan", "yahan", "idhar", "udhar", "agla", "pichla", "dusra",
+    "karna", "karne", "karte", "wale", "wali", "wala",
+    "lagta", "lagti", "lagte", "milta", "milti", "milte",
+    "sakta", "sakti", "sakte", "usme", "isme", "isse", "usse",
+    "aau", "tahar", "hamar", "baare",
+})
 
 #: Questions with this many raw words or fewer almost certainly require context.
 _SHORT_QUERY_WORD_LIMIT = 4
@@ -48,14 +88,86 @@ _HISTORY_WINDOW = 6
 #: Character limit for each history message to keep prompt concise.
 _HISTORY_MESSAGE_CHAR_LIMIT = 400
 
-REWRITE_SYSTEM_PROMPT = """You are a query rewriting component in an academic document search system.
-The academic source documents in the database are written in English.
+REWRITE_SYSTEM_PROMPT = """You are an expert academic search query rewriter for the IIIT Naya Raipur (IIIT-NR) Academic RAG System.
+The official institute knowledge base and academic source documents are written in English.
 
-Your task:
-1. If the user's question contains Hindi or Devanagari, translate the core question into a clear, standalone English search question.
-2. If the user refers to prior conversation ("it", "they", "he", "she", "that", "this"), replace references with the specific entity from conversation history.
-3. Return a STANDALONE ENGLISH question that can be directly searched against the English academic documents.
-4. Reply ONLY with the single standalone English question. No explanations, no quotation marks, no prefixes."""
+Your primary mission:
+Produce a single, concise, search-optimized STANDALONE ENGLISH QUERY that will retrieve the most accurate document sections using dense semantic search (FAISS) and sparse lexical search (BM25).
+
+Rules to follow:
+1. Cross-Lingual Translation (Hindi, Chhattisgarhi & Hinglish):
+   - Translate any Hindi (Devanagari or Romanized/Hinglish) or Chhattisgarhi (Devanagari or Romanized) query into formal academic English.
+   - Chhattisgarhi dialect glossary:
+     * "कतेक" / "katek" = how much / what amount / cutoff
+     * "हावे" / "heve" / "hawe" = is / exists
+     * "काबर" / "kabar" / "kaabar" = why / for what reason
+     * "कइसे" / "kaise" / "kisan" = how / what is the procedure
+     * "ओखर" / "okhar" = its / their / for that
+     * "एखर" / "ekhar" = this / for this
+     * "अउ" / "aau" = and / also
+     * "लागही" / "laghi" = will cost / is required
+     * "मिलही" / "milhi" = will be obtained / eligibility
+   - Preserve technical, institutional, and entrance exam acronyms: JoSAA, CSAB, JEE Main, GATE, CCMT, CSE, DSAI, ECE, CPI, SPI, CGPA, SGPA, IIIT-NR.
+
+2. Context & Coreference Resolution:
+   - If the query contains pronouns or referential expressions ("it", "they", "that", "this", "iska", "uska", "okhar", "wahan", "agla", "the former"), replace them with the exact academic entity from the conversation history.
+   - If the query is an elliptical follow-up (e.g., "And for ECE?", "What about hostel?"), expand it into a complete, standalone question incorporating the topic from the conversation history.
+
+3. Retrieval Optimization (BM25 & FAISS):
+   - Include high-signal academic keywords in the rewritten query (e.g., "opening and closing rank cutoff", "fee structure and hostel charges", "curriculum and syllabus credits", "eligibility criteria and admission procedure").
+   - Do NOT answer the question.
+   - Do NOT summarize the conversation.
+   - Reply ONLY with the single standalone English question.
+   - Never output explanations, bullet points, markdown quotes, or prefixes like "Rewritten Question:".
+
+Few-Shot Demonstrations:
+- History: [User: "Tell me about B.Tech CSE at IIIT-NR", Assistant: "B.Tech in Computer Science and Engineering focuses on..."]
+  Follow-up: "Iska cutoff kitna gaya tha pichle saal?"
+  Rewritten: What was the previous year JEE Main JoSAA opening and closing cutoff rank for B.Tech Computer Science and Engineering (CSE) at IIIT-NR?
+
+- History: [User: "What are the hostel facilities?", Assistant: "IIIT-NR provides separate hostels for boys and girls with..."]
+  Follow-up: "Okhar fees katek hawe aau mess charge kitna laghi?"
+  Rewritten: What is the fee structure for hostel accommodation and mess charges at IIIT-NR?
+
+- History: None
+  Question: "CSE ki opening rank kya hai"
+  Rewritten: What is the opening rank for B.Tech Computer Science and Engineering (CSE) admission at IIIT-NR?
+
+- History: [User: "What is the policy for branch sliding?", Assistant: "Branch sliding is offered after the first year..."]
+  Follow-up: "Uske liye minimum CPI kitna chahiye?"
+  Rewritten: What is the minimum CPI requirement for branch sliding at IIIT-NR?
+
+- History: None
+  Question: "सीएसई म एडमिशन कइसे मिलही?"
+  Rewritten: What is the admission procedure and eligibility criteria for B.Tech Computer Science and Engineering at IIIT-NR?
+
+- History: [User: "Can I take academic leave?", Assistant: "Academic leave can be granted under Ordinance Section 4..."]
+  Follow-up: "How long maximum?"
+  Rewritten: What is the maximum duration allowed for academic leave of absence?"""
+
+
+def is_indic_or_hinglish(query: str) -> bool:
+    """
+    Check if a query contains Hindi or Chhattisgarhi in Devanagari or Romanized (Hinglish) script.
+    """
+    if not query:
+        return False
+
+    # Devanagari script (Hindi, Chhattisgarhi, Marathi, etc.)
+    if re.search(r"[\u0900-\u097F]", query):
+        return True
+
+    # Tokenize lowercased alphanumeric words
+    tokens = re.findall(r"\b[a-zA-Z]+\b", query.lower())
+    if not tokens:
+        return False
+
+    strong_matches = sum(1 for t in tokens if t in _STRONG_INDIC_WORDS)
+    if strong_matches >= 1:
+        return True
+
+    moderate_matches = sum(1 for t in tokens if t in _MODERATE_INDIC_WORDS)
+    return moderate_matches >= 2
 
 
 def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
@@ -63,7 +175,8 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
     Determine whether a query needs rewriting, without calling an LLM.
 
     True if:
-    - The query contains Hindi / Devanagari characters (needs English translation for retrieval).
+    - The query contains Hindi / Chhattisgarhi (Devanagari or Romanized/Hinglish),
+      which must be translated to English for document retrieval.
     - Conversation history exists AND the question appears context-dependent (short or referential).
 
     Args:
@@ -74,8 +187,8 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
     if not stripped:
         return False
 
-    # Any Devanagari (Hindi) text needs rewriting into English search query
-    if re.search(r"[\u0900-\u097F]", stripped):
+    # Indic (Devanagari or Hinglish / Chhattisgarhi) always needs English translation for retrieval
+    if is_indic_or_hinglish(stripped):
         return True
 
     if not chat_history:
@@ -133,11 +246,13 @@ def _sanitize(raw: str, fallback: str) -> str:
 
     text = re.sub(r'^["\'`]+|["\'`]+$', "", text).strip()
     text = re.sub(
-        r"^(standalone question|rewritten question|query|answer|pertanyaan mandiri|hasil penulisan ulang|jawaban)\s*[:\-]\s*",
+        r"^(standalone question|rewritten question|standalone english question|rewritten query|search query|english query|query|answer|pertanyaan mandiri|hasil penulisan ulang|jawaban)\s*[:\-]\s*",
         "",
         text,
         flags=re.IGNORECASE,
     ).strip()
+    text = re.sub(r"^\*\*(.+?)\*\*$", r"\1", text).strip()
+    text = re.sub(r'^["\'`]+|["\'`]+$', "", text).strip()
 
     if not text:
         return fallback
@@ -156,7 +271,7 @@ def rewrite_query(
     force: bool = False,
 ) -> str:
     """
-    Rewrite follow-up question into standalone query using utility LLM.
+    Rewrite follow-up or cross-lingual question into a standalone English query using utility LLM.
 
     Fail-safe: any failure returns the original query.
     """
@@ -166,8 +281,8 @@ def rewrite_query(
     if not force and not needs_rewrite(query, chat_history):
         return query
 
-    has_devanagari = bool(re.search(r"[\u0900-\u097F]", query))
-    if not chat_history and not has_devanagari and not force:
+    is_indic = is_indic_or_hinglish(query)
+    if not chat_history and not is_indic and not force:
         return query
 
     prompt = build_rewrite_prompt(query, chat_history)
