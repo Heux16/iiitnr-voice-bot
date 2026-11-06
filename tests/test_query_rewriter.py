@@ -9,6 +9,7 @@ from app.query_rewriter import (
     build_rewrite_prompt,
     is_indic_or_hinglish,
     needs_rewrite,
+    normalize_spoken_acronyms,
     rewrite_query,
 )
 
@@ -218,3 +219,15 @@ class TestRewriteQuery:
         )
         hasil = rewrite_query("होस्टल के फीस कतेक लागही?", None)
         assert hasil == "What is the fee structure for hostel accommodation?"
+
+    def test_normalize_spoken_acronyms(self):
+        assert normalize_spoken_acronyms("प्रिबल IIT Naya Raipur कहां इस्थित है?") == \
+               "IIIT Naya Raipur कहां स्थित है?"
+        assert normalize_spoken_acronyms("Triple IT Naya Raipur kahan hai?") == \
+               "IIIT Naya Raipur kahan hai?"
+        assert normalize_spoken_acronyms("Triple I T Naya Raipur") == \
+               "IIIT Naya Raipur"
+        assert normalize_spoken_acronyms("ट्रिपल आई टी नया रायपुर कहां स्थित है") == \
+               "IIIT नया रायपुर कहां स्थित है"
+        assert normalize_spoken_acronyms("आईआईआईटी नया रायपुर") == \
+               "IIIT नया रायपुर"

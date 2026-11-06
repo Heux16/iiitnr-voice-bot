@@ -128,12 +128,12 @@ def build_no_context_response() -> str:
     """
     Response when no relevant chunks are found.
     Called WITHOUT invoking LLM to save API costs.
+    Provides polite Hindi response matching the voice assistant language.
     """
     return (
-        "I apologize, but that information is **not found** "
-        "in the currently available documents.\n\n"
-        "Suggestions:\n"
-        "- Try rephrasing your question with different keywords.\n"
-        "- Ensure your question relates to the contents of the academic guidelines.\n"
-        "- Contact the academic office for details not covered in these documents."
+        "मुझे क्षमा करें, यह जानकारी वर्तमान में उपलब्ध शैक्षणिक दस्तावेजों में **नहीं मिली** है।\n\n"
+        "सुझाव:\n"
+        "- कृपया अपने प्रश्न को अन्य शब्दों में पूछने का प्रयास करें।\n"
+        "- सुनिश्चित करें कि आपका प्रश्न संस्थान के नियमों, प्रवेश, पाठ्यक्रम, कटऑफ या सुविधाओं से संबंधित है।\n"
+        "- अधिक सहायता के लिए शैक्षणिक कार्यालय से संपर्क करें।"
     )

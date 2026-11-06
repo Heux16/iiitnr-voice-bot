@@ -61,6 +61,28 @@ class ASREngine(ABC):
         raise NotImplementedError
 
 
+def normalize_spoken_acronyms(text: str) -> str:
+    """
+    Normalise common phonetic misrecognitions of institute acronyms
+    when spoken in Indian English, Hindi, or Chhattisgarhi.
+    """
+    if not text:
+        return text
+
+    # Phonetic variations of "Triple IT / Triple I T" in Devanagari or English
+    text = re.sub(
+        r"(?:प्रिबल|ट्रिपल|ट्रिपिल|त्रिपल|Triple)\s*(?:I\s*I\s*T|I\s*T|आई\s*आई\s*टी|आई\s*टी|eye\s*tea|I\.T\.)",
+        "IIIT",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # Devanagari expansion
+    text = re.sub(r"आई\s*आई\s*आई\s*टी", "IIIT", text)
+    # Common Devanagari phonetic misspelling for location query
+    text = re.sub(r"\bइस्थित\b", "स्थित", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 class FasterWhisperEngine(ASREngine):
     """
     Multilingual Whisper engine (CTranslate2).
@@ -90,11 +112,17 @@ class FasterWhisperEngine(ASREngine):
 
         # Domain guidance: language-specific prompts avoid cross-language confusion
         prompt = None
-        hotwords = "IIIT Naya Raipur B.Tech M.Tech CSE DSAI ECE admissions fees hostel सीजीपीए बीटेक एमटेक फीस"
+        hotwords = (
+            "IIIT IIIT-NR Triple IT Triple I T ट्रिपल आईटी ट्रिपल आई टी आईआईआईटी "
+            "Naya Raipur नया रायपुर B.Tech M.Tech CSE DSAI ECE admissions fees hostel "
+            "cutoff स्थित सीजीपीए बीटेक एमटेक फीस"
+        )
         if target_lang == "hi":
-            prompt = "आईआईआईटी नया रायपुर, बीटेक, एमटेक, फीस, प्रवेश, हॉस्टल, छात्रवृत्ति, सीजीपीए."
+            prompt = "आईआईआईटी नया रायपुर, ट्रिपल आईटी, बीटेक, एमटेक, फीस, प्रवेश, हॉस्टल, छात्रवृत्ति, स्थित, सीजीपीए."
         elif target_lang == "en":
-            prompt = "IIIT Naya Raipur, Dr. SPM IIIT-NR, B.Tech, M.Tech, Ph.D., admissions, fees, hostel, courses, CGPA."
+            prompt = "IIIT Naya Raipur, Dr. SPM IIIT-NR, Triple IT, B.Tech, M.Tech, Ph.D., admissions, fees, hostel, courses, CGPA."
+        else:
+            prompt = "IIIT Naya Raipur, ट्रिपल आई टी नया रायपुर, B.Tech, M.Tech, CSE, DSAI, ECE, फीस, स्थित, admissions, hostel."
 
         beam = settings.ASR_BEAM_SIZE if fast else min(settings.ASR_FINAL_BEAM_SIZE, 2)
 
@@ -158,6 +186,9 @@ class FasterWhisperEngine(ASREngine):
             LOGGER.info("Discarded known silence hallucination phrase: %r", text)
             text = ""
 
+        # Normalise spoken acronyms (e.g. "Triple IT" / "प्रिबल IIT" -> "IIIT")
+        text = normalize_spoken_acronyms(text)
+
         return Transcript(
             text=text,
             avg_logprob=avg_logprob,
@@ -176,6 +207,7 @@ def clean_mms_devanagari(text: str) -> str:
     if not text:
         return ""
     text = re.sub(r'\s+([\u093e-\u094c\u0901-\u0903\u094d])', r'\1', text)
+    text = normalize_spoken_acronyms(text)
     return re.sub(r'\s+', ' ', text).strip()
 
 

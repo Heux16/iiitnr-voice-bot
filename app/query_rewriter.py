@@ -141,9 +141,35 @@ Few-Shot Demonstrations:
   Question: "सीएसई म एडमिशन कइसे मिलही?"
   Rewritten: What is the admission procedure and eligibility criteria for B.Tech Computer Science and Engineering at IIIT-NR?
 
+- History: None
+  Question: "IIIT Naya Raipur कहां स्थित है?"
+  Rewritten: Where is the campus and geographic location of IIIT Naya Raipur?
+
 - History: [User: "Can I take academic leave?", Assistant: "Academic leave can be granted under Ordinance Section 4..."]
   Follow-up: "How long maximum?"
   Rewritten: What is the maximum duration allowed for academic leave of absence?"""
+
+
+def normalize_spoken_acronyms(text: str) -> str:
+    """
+    Normalise common phonetic misrecognitions of institute acronyms
+    when spoken in Indian English, Hindi, or Chhattisgarhi.
+    """
+    if not text:
+        return text
+
+    # Phonetic variations of "Triple IT / Triple I T" in Devanagari or English
+    text = re.sub(
+        r"(?:प्रिबल|ट्रिपल|ट्रिपिल|त्रिपल|Triple)\s*(?:I\s*I\s*T|I\s*T|आई\s*आई\s*टी|आई\s*टी|eye\s*tea|I\.T\.)",
+        "IIIT",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # Devanagari expansion
+    text = re.sub(r"आई\s*आई\s*आई\s*टी", "IIIT", text)
+    # Common Devanagari phonetic misspelling for location query
+    text = re.sub(r"\bइस्थित\b", "स्थित", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def is_indic_or_hinglish(query: str) -> bool:
@@ -183,7 +209,8 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
         query: User's latest question.
         chat_history: Prior conversation history.
     """
-    stripped = query.strip()
+    cleaned = normalize_spoken_acronyms(query)
+    stripped = cleaned.strip()
     if not stripped:
         return False
 
@@ -278,14 +305,16 @@ def rewrite_query(
     if not query or not query.strip():
         return query
 
-    if not force and not needs_rewrite(query, chat_history):
-        return query
+    cleaned_query = normalize_spoken_acronyms(query)
 
-    is_indic = is_indic_or_hinglish(query)
+    if not force and not needs_rewrite(cleaned_query, chat_history):
+        return cleaned_query
+
+    is_indic = is_indic_or_hinglish(cleaned_query)
     if not chat_history and not is_indic and not force:
-        return query
+        return cleaned_query
 
-    prompt = build_rewrite_prompt(query, chat_history)
+    prompt = build_rewrite_prompt(cleaned_query, chat_history)
 
     try:
         raw_response = call_utility_llm(
@@ -294,6 +323,6 @@ def rewrite_query(
             max_tokens=64,
             api_key=api_key,
         )
-        return _sanitize(raw_response, fallback=query)
+        return _sanitize(raw_response, fallback=cleaned_query)
     except Exception:
-        return query
+        return cleaned_query
