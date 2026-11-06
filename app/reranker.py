@@ -29,7 +29,8 @@ import time
 from app.llm_client import call_utility_llm
 
 #: Character limit for each candidate snippet sent to reranker.
-SNIPPET_CHAR_LIMIT = 900
+#: Maximum chunk length in the index is ~1520 characters; 2000 ensures complete context.
+SNIPPET_CHAR_LIMIT = 2000
 
 RERANK_SYSTEM_PROMPT = """You are a relevance ranking component (reranker) in an academic document search system.
 
