@@ -129,6 +129,25 @@ def fetch_tts_audio(text: str, voice: str = "Female") -> bytes | None:
     return None
 
 
+def transcribe_audio_via_stt(audio_bytes: bytes, language: str = "auto") -> dict:
+    """Send recorded speech bytes to local GPU STT microservice on port 8001."""
+    try:
+        resp = requests.post(
+            f"http://127.0.0.1:8001/transcribe?language={language}",
+            data=audio_bytes,
+            headers={"Content-Type": "audio/wav"},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return {"error": f"STT server error {resp.status_code}: {resp.text}"}
+    except requests.exceptions.ConnectionError:
+        return {"error": "STT server on port 8001 is unreachable. Please ensure it is running."}
+    except Exception as e:
+        LOGGER.warning("STT microservice call failed: %s", e)
+        return {"error": str(e)}
+
+
 def render_streaming_tts_player(session_id: str) -> None:
     """Embed Web Audio API real-time queue player connected via WebSocket to local GPU TTS server."""
     html_code = f"""
@@ -472,6 +491,83 @@ def render_chat_view(
                     )
                 if operator_mode and msg.get("debug"):
                     render_retrieval_debug(msg["debug"])
+
+    # 🎙️ Voice Input (Chhattisgarhi / Hindi / English)
+    with st.expander("🎙️ Speak your question (Voice Input)", expanded=False):
+        v_col1, v_col2 = st.columns([2, 1])
+        with v_col2:
+            stt_lang_choice = st.selectbox(
+                "Voice Language",
+                options=[
+                    "🌐 Auto (English / Hindi / Hinglish)",
+                    "🌾 Chhattisgarhi (छत्तीसगढ़ी - MMS)",
+                    "🇮🇳 Hindi (हिन्दी - Whisper)",
+                    "🇬🇧 English (Whisper)",
+                ],
+                index=0,
+                help="Auto automatically detects English or Hindi. Choose Chhattisgarhi for native Meta MMS 1B model.",
+            )
+            lang_code_map = {
+                "🌐 Auto (English / Hindi / Hinglish)": "auto",
+                "🌾 Chhattisgarhi (छत्तीसगढ़ी - MMS)": "hne",
+                "🇮🇳 Hindi (हिन्दी - Whisper)": "hi",
+                "🇬🇧 English (Whisper)": "en",
+            }
+            target_lang = lang_code_map[stt_lang_choice]
+
+        with v_col1:
+            recorded_audio = st.audio_input("Record your question from microphone:")
+
+        if recorded_audio is not None:
+            raw_audio = recorded_audio.getvalue()
+            audio_hash = hash(raw_audio)
+            if st.session_state.get("last_processed_audio_hash") != audio_hash:
+                st.session_state["last_processed_audio_hash"] = audio_hash
+                with st.spinner("🎧 Transcribing speech on GPU..."):
+                    result = transcribe_audio_via_stt(raw_audio, language=target_lang)
+                    if result and result.get("error"):
+                        st.error(f"❌ {result['error']}")
+                    elif result and result.get("text"):
+                        recognized_text = result["text"].strip()
+                        det_lang = result.get("detected_language", target_lang)
+                        inf_ms = result.get("inference_ms", 0)
+                        st.session_state["last_audio_debug"] = {
+                            "raw_audio": raw_audio,
+                            "processed_b64": result.get("processed_audio_b64", ""),
+                            "text": recognized_text,
+                            "lang": det_lang,
+                            "inf_ms": inf_ms,
+                            "log_id": result.get("log_id", ""),
+                            "raw_path": result.get("raw_audio_path", ""),
+                            "proc_path": result.get("processed_audio_path", ""),
+                            "hardware_gate_warning": result.get("hardware_gate_warning", ""),
+                        }
+                        st.toast(f"🗣️ Transcribed [{det_lang.upper()} in {inf_ms}ms]: {recognized_text}", icon="🎙️")
+                        st.session_state["queued_query"] = recognized_text
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ No clear speech was detected. Please make sure your microphone is allowed/unmuted and speak closer to the mic.")
+
+        # Audio Inspection Player (Compare Raw vs. Processed Audio)
+        if "last_audio_debug" in st.session_state:
+            dbg = st.session_state["last_audio_debug"]
+            st.markdown("---")
+            st.markdown("🎧 **Voice Inspector: Compare Raw vs. Processed Audio**")
+            col_raw, col_proc = st.columns(2)
+            with col_raw:
+                st.caption("🎙️ **Raw Microphone Audio** (Direct from browser)")
+                st.audio(dbg["raw_audio"], format="audio/wav")
+            with col_proc:
+                st.caption("🎛️ **Processed Audio** (16kHz, Normalized, Click-filtered)")
+                if dbg.get("processed_b64"):
+                    st.audio(base64.b64decode(dbg["processed_b64"]), format="audio/wav")
+                else:
+                    st.caption("*(Processed audio unavailable)*")
+            if dbg.get("hardware_gate_warning"):
+                st.warning(f"🔇 **Hardware/Browser Cutoff Detected:** {dbg['hardware_gate_warning']}\n\n"
+                           f"👉 **Fix:** Turn off *Audio Enhancements* in Windows Sound Settings or disable *Brave Shields* for localhost.")
+            if dbg.get("log_id"):
+                st.caption(f"💾 **Logged to Disk:** `{dbg['log_id']}` in `STT/stt-service/logs/audio/`")
 
     # Process queued query from preset if any
     input_query = None
@@ -1067,11 +1163,13 @@ def _operator_main_legacy() -> None:
             document_filter=selected_documents,
         )
 
-        nav_label("Voice Narration (GPU TTS)")
-        enable_tts = st.toggle("🔊 Enable Voice Output", value=True, help="Synthesizes Hindi speech via local GPU VITS TTS")
+        nav_label("Voice Engine (GPU)")
+        enable_tts = st.toggle("🔊 Voice Output", value=True, help="Synthesizes Hindi speech via local GPU VITS TTS")
         voice_gender = st.selectbox("Voice", ["Female", "Male"], index=0, key="operator_voice")
         st.session_state["enable_tts"] = enable_tts
         st.session_state["voice_gender"] = voice_gender
+        st.caption("🎙️ STT: Port 8001 (Whisper / MMS)")
+        st.caption("🔊 TTS: Port 8000 (Chhattisgarhi VITS)")
 
         st.divider()
         if st.button("🗑️ Clear Conversation"):
@@ -1121,11 +1219,13 @@ def main() -> None:
         st.caption(
             "Ask academic, faculty, curriculum, and campus questions based on official IIIT-NR documents."
         )
-        nav_label("Voice Narration (GPU TTS)")
-        enable_tts = st.toggle("🔊 Hindi Voice Output", value=True, help="Synthesizes Hindi speech via local GPU VITS TTS")
+        nav_label("Voice Engine (GPU)")
+        enable_tts = st.toggle("🔊 Voice Output", value=True, help="Synthesizes Hindi speech via local GPU VITS TTS")
         voice_gender = st.selectbox("Voice", ["Female", "Male"], index=0, key="public_voice")
         st.session_state["enable_tts"] = enable_tts
         st.session_state["voice_gender"] = voice_gender
+        st.caption("🎙️ STT: Port 8001 (Whisper / MMS)")
+        st.caption("🔊 TTS: Port 8000 (Chhattisgarhi VITS)")
 
         st.divider()
         if st.button("🗑️ Clear Conversation", use_container_width=True):

@@ -96,8 +96,11 @@ def needs_rewrite(query: str, chat_history: list[dict] | None) -> bool:
     )
 
 
-def build_rewrite_prompt(query: str, chat_history: list[dict]) -> str:
+def build_rewrite_prompt(query: str, chat_history: list[dict] | None = None) -> str:
     """Construct rewrite prompt from recent conversation history window."""
+    if not chat_history:
+        return f"LATEST USER QUESTION:\n{query}\n\nStandalone rewritten question:"
+
     recent = chat_history[-_HISTORY_WINDOW:]
 
     parts = ["CONVERSATION HISTORY:"]
@@ -163,7 +166,8 @@ def rewrite_query(
     if not force and not needs_rewrite(query, chat_history):
         return query
 
-    if not chat_history:
+    has_devanagari = bool(re.search(r"[\u0900-\u097F]", query))
+    if not chat_history and not has_devanagari and not force:
         return query
 
     prompt = build_rewrite_prompt(query, chat_history)
