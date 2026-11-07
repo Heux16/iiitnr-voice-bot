@@ -183,22 +183,23 @@ def render_streaming_tts_player(session_id: str) -> None:
     (function() {{
       const sessionId = "{session_id}";
       const wsUrl = "ws://127.0.0.1:8000/ws_audio/" + sessionId;
-      let audioCtx = null;
       let nextStartTime = 0;
       let ws = null;
       let sentenceCount = 0;
 
       function getAudioContext() {{
-        if (!audioCtx) {{
-          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        const parentWin = window.parent || window;
+        const AudioContextClass = parentWin.AudioContext || parentWin.webkitAudioContext || window.AudioContext;
+        if (!parentWin.__iiitnr_tts_audio_ctx__ || parentWin.__iiitnr_tts_audio_ctx__.state === 'closed') {{
           if (AudioContextClass) {{
-            audioCtx = new AudioContextClass();
+            parentWin.__iiitnr_tts_audio_ctx__ = new AudioContextClass();
           }}
         }}
-        if (audioCtx && audioCtx.state === 'suspended') {{
-          audioCtx.resume();
+        const ctx = parentWin.__iiitnr_tts_audio_ctx__;
+        if (ctx && ctx.state === 'suspended') {{
+          ctx.resume();
         }}
-        return audioCtx;
+        return ctx;
       }}
 
       getAudioContext();
@@ -286,6 +287,518 @@ def render_streaming_tts_player(session_id: str) -> None:
     </script>
     """
     st.components.v1.html(html_code, height=52)
+
+
+# ──────────────────────────────────────────────
+# Auto-Stop Voice Activity Detection (VAD) Controller
+# ──────────────────────────────────────────────
+
+VAD_CONTROLLER_HTML_TEMPLATE = """
+<body style="margin: 0; padding: 0; overflow: hidden; background: transparent;">
+  <div id="vad-badge" style="
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    color: #334155;
+    box-sizing: border-box;
+    height: 38px;
+  ">
+    <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+      <span id="vad-dot" style="
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      "></span>
+      <span id="vad-text" style="
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      ">
+        ⚡ <b>Auto-Stop VAD:</b> Ready • Press Record, recording auto-stops on silence (__SILENCE_SEC__s)
+      </span>
+    </div>
+    <div id="vad-meter-wrap" style="
+      display: none;
+      align-items: center;
+      gap: 8px;
+      width: 130px;
+      flex-shrink: 0;
+      margin-left: 8px;
+    ">
+      <div style="
+        flex: 1;
+        height: 6px;
+        background: #e2e8f0;
+        border-radius: 3px;
+        overflow: hidden;
+      ">
+        <div id="vad-meter-bar" style="
+          width: 0%;
+          height: 100%;
+          background: #10b981;
+          border-radius: 3px;
+          transition: width 0.05s ease;
+        "></div>
+      </div>
+      <span id="vad-countdown" style="
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        min-width: 32px;
+        text-align: right;
+      "></span>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    const currentEnabled = __ENABLED__;
+    const currentSilenceSec = __SILENCE_SEC__;
+    const parentWin = window.parent || window;
+
+    // 1. Inject Master VAD Script into TOP WINDOW if not already installed
+    if (!parentWin.__iiitnr_vad_installed__ && parentWin.document && parentWin.document.head) {
+      try {
+        parentWin.__iiitnr_vad_installed__ = true;
+        const s = parentWin.document.createElement('script');
+        s.id = 'iiitnr-vad-master-script';
+        s.textContent = `
+          (function() {
+            if (window.__iiitnr_vad_controller__) return;
+
+            const vad = {
+              enabled: true,
+              silenceSec: 1.4,
+              state: 'idle',
+              audioCtx: null,
+              stream: null,
+              sourceNode: null,
+              analyser: null,
+              pollTimer: null,
+              analysisTimer: null,
+              speechStarted: false,
+              speechOnsetCount: 0,
+              recordStartTime: 0,
+              lastSpeechTime: 0,
+              stoppedAt: 0,
+              noiseFloor: 0.008,
+              onUpdateCb: null,
+
+              configure: function(opts) {
+                if (opts.enabled !== undefined) this.enabled = opts.enabled;
+                if (opts.silenceSec !== undefined) this.silenceSec = opts.silenceSec;
+                if (opts.onUpdate !== undefined) this.onUpdateCb = opts.onUpdate;
+                this.notify();
+              },
+
+              notify: function(extra) {
+                if (typeof this.onUpdateCb === 'function') {
+                  try {
+                    this.onUpdateCb({
+                      state: this.state,
+                      enabled: this.enabled,
+                      silenceSec: this.silenceSec,
+                      speechStarted: this.speechStarted,
+                      ...(extra || {})
+                    });
+                  } catch (e) {
+                    this.onUpdateCb = null;
+                  }
+                }
+              },
+
+              getAudioContext: function() {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!this.audioCtx || this.audioCtx.state === 'closed') {
+                  this.audioCtx = new AudioCtx();
+                }
+                if (this.audioCtx.state === 'suspended' || this.audioCtx.state === 'interrupted') {
+                  this.audioCtx.resume();
+                }
+                return this.audioCtx;
+              },
+
+              getStopButton: function() {
+                try {
+                  let btn = document.querySelector('[data-testid="stAudioInputActionButton"][aria-label*="Stop"]');
+                  if (btn) return btn;
+                  btn = document.querySelector('[data-testid="stAudioInput"] button[aria-label*="Stop"]');
+                  if (btn) return btn;
+                  const allBtns = document.querySelectorAll('[data-testid="stAudioInput"] button');
+                  for (let i = 0; i < allBtns.length; i++) {
+                    const b = allBtns[i];
+                    const l = (b.getAttribute('aria-label') || b.getAttribute('title') || b.innerText || '').toLowerCase();
+                    if (l.includes('stop')) return b;
+                  }
+                } catch (e) {}
+                return null;
+              },
+
+              start: function() {
+                if (this.pollTimer) clearInterval(this.pollTimer);
+                this.pollTimer = setInterval(() => this.poll(), 100);
+                console.log("[IIITNR-VAD] Top-window master controller initialized and polling.");
+              },
+
+              poll: function() {
+                const stopBtn = this.getStopButton();
+
+                if (this.state === 'stopping') {
+                  if (!stopBtn || (Date.now() - this.stoppedAt > 1500)) {
+                    this.endSession();
+                  }
+                  return;
+                }
+
+                if (stopBtn) {
+                  if (this.state === 'idle') {
+                    if (this.enabled) {
+                      this.startSession(stopBtn);
+                    } else {
+                      this.notify({ state: 'manual' });
+                    }
+                  }
+                } else {
+                  if (this.state !== 'idle') {
+                    this.endSession();
+                  }
+                }
+              },
+
+              startSession: async function(stopBtn) {
+                if (this.state === 'listening' || this.state === 'speaking' || this.state === 'silence') return;
+
+                this.state = 'listening';
+                this.speechStarted = false;
+                this.speechOnsetCount = 0;
+                this.recordStartTime = Date.now();
+                this.lastSpeechTime = 0;
+                this.noiseFloor = 0.008;
+                this.notify({ state: 'listening' });
+
+                try {
+                  let stream = this.stream;
+                  let isStreamLive = stream && stream.active && stream.getAudioTracks().some(t => t.readyState === 'live');
+
+                  if (!isStreamLive) {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                      audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                      }
+                    });
+                    this.stream = stream;
+                  }
+
+                  this.stream.getAudioTracks().forEach(t => { t.enabled = true; });
+
+                  const ctx = this.getAudioContext();
+                  if (ctx.state !== 'running') {
+                    await ctx.resume();
+                  }
+
+                  if (this.sourceNode) {
+                    try { this.sourceNode.disconnect(); } catch (e) {}
+                  }
+                  if (this.analyser) {
+                    try { this.analyser.disconnect(); } catch (e) {}
+                  }
+
+                  this.sourceNode = ctx.createMediaStreamSource(this.stream);
+                  this.analyser = ctx.createAnalyser();
+                  this.analyser.fftSize = 512;
+                  this.analyser.smoothingTimeConstant = 0.2;
+
+                  this.sourceNode.connect(this.analyser);
+
+                  this.startAnalysis(stopBtn);
+                } catch (err) {
+                  console.warn("[IIITNR-VAD] startSession error:", err);
+                  this.cleanup();
+                  this.notify({ state: 'error', message: 'Microphone access notice' });
+                }
+              },
+
+              startAnalysis: function(stopBtn) {
+                if (this.analysisTimer) clearInterval(this.analysisTimer);
+
+                const analyser = this.analyser;
+                if (!analyser) return;
+
+                const buffer = new Float32Array(analyser.fftSize);
+                let frame = 0;
+
+                this.analysisTimer = setInterval(() => {
+                  const currentBtn = this.getStopButton();
+                  if (!currentBtn || this.state === 'stopping' || this.state === 'idle') {
+                    this.endSession();
+                    return;
+                  }
+
+                  if (!this.analyser) return;
+
+                  try {
+                    this.analyser.getFloatTimeDomainData(buffer);
+                  } catch (e) {
+                    return;
+                  }
+
+                  let sum = 0;
+                  for (let i = 0; i < buffer.length; i++) {
+                    sum += buffer[i] * buffer[i];
+                  }
+                  const rms = Math.sqrt(sum / buffer.length);
+                  const now = Date.now();
+                  const elapsed = now - this.recordStartTime;
+
+                  frame++;
+                  if (frame < 12 && !this.speechStarted) {
+                    this.noiseFloor = Math.max(0.003, Math.min(0.022, (this.noiseFloor * 0.7) + (rms * 0.3)));
+                  }
+
+                  const speechThresh = Math.max(0.020, this.noiseFloor * 2.2);
+
+                  if (elapsed >= 60000) {
+                    this.triggerStop(currentBtn);
+                    return;
+                  }
+
+                  if (rms >= speechThresh) {
+                    this.speechOnsetCount++;
+                    if (this.speechOnsetCount >= 3) {
+                      this.speechStarted = true;
+                      this.lastSpeechTime = now;
+                      this.state = 'speaking';
+                      this.notify({ state: 'speaking', rms: rms });
+                    }
+                  } else {
+                    this.speechOnsetCount = 0;
+                    if (this.speechStarted) {
+                      const silenceMs = now - this.lastSpeechTime;
+                      const targetMs = this.silenceSec * 1000;
+                      const remaining = Math.max(0, (targetMs - silenceMs) / 1000).toFixed(1);
+
+                      this.state = 'silence';
+                      this.notify({
+                        state: 'silence',
+                        rms: rms,
+                        silenceMs: silenceMs,
+                        remainingSec: remaining
+                      });
+
+                      if (silenceMs >= targetMs) {
+                        console.log("[IIITNR-VAD] Silence limit reached (" + this.silenceSec + "s). Auto-stopping!");
+                        this.triggerStop(currentBtn);
+                        return;
+                      }
+                    } else {
+                      this.state = 'listening';
+                      if (elapsed >= 14000) {
+                        this.triggerStop(currentBtn);
+                        return;
+                      }
+                      this.notify({ state: 'listening', rms: rms });
+                    }
+                  }
+                }, 40);
+              },
+
+              triggerStop: function(btn) {
+                if (this.state === 'stopping') return;
+                this.state = 'stopping';
+                this.stoppedAt = Date.now();
+                this.notify({ state: 'stopping' });
+
+                try {
+                  btn.click();
+                } catch (e) {
+                  console.warn("[IIITNR-VAD] btn.click notice:", e);
+                }
+                try {
+                  const opts = { bubbles: true, cancelable: true, view: window };
+                  btn.dispatchEvent(new MouseEvent('mousedown', opts));
+                  btn.dispatchEvent(new MouseEvent('mouseup', opts));
+                  btn.dispatchEvent(new MouseEvent('click', opts));
+                } catch (e) {}
+
+                this.cleanup();
+              },
+
+              cleanup: function() {
+                if (this.analysisTimer) {
+                  clearInterval(this.analysisTimer);
+                  this.analysisTimer = null;
+                }
+                if (this.sourceNode) {
+                  try { this.sourceNode.disconnect(); } catch (e) {}
+                  this.sourceNode = null;
+                }
+                if (this.analyser) {
+                  try { this.analyser.disconnect(); } catch (e) {}
+                  this.analyser = null;
+                }
+                if (this.stream) {
+                  try {
+                    this.stream.getAudioTracks().forEach(t => { t.enabled = false; });
+                  } catch (e) {}
+                }
+              },
+
+              endSession: function() {
+                this.cleanup();
+                this.state = 'idle';
+                this.speechStarted = false;
+                this.speechOnsetCount = 0;
+                this.notify({ state: 'idle' });
+              }
+            };
+
+            window.__iiitnr_vad_controller__ = vad;
+            vad.start();
+          })();
+        `;
+        parentWin.document.head.appendChild(s);
+      } catch (err) {
+        console.warn("[IIITNR-VAD] Master injection notice:", err);
+      }
+    }
+
+    function updateWidgetUI(data) {
+      const dot = document.getElementById('vad-dot');
+      const text = document.getElementById('vad-text');
+      const meterWrap = document.getElementById('vad-meter-wrap');
+      const meterBar = document.getElementById('vad-meter-bar');
+      const countdown = document.getElementById('vad-countdown');
+      if (!dot || !text) return;
+
+      if (!data.enabled) {
+        dot.style.background = '#94a3b8';
+        dot.style.boxShadow = 'none';
+        text.innerHTML = '⚪ <b>Manual Mode:</b> Auto-Stop is off • Press Stop button when done';
+        if (meterWrap) meterWrap.style.display = 'none';
+        return;
+      }
+
+      switch (data.state) {
+        case 'idle':
+          dot.style.background = '#10b981';
+          dot.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.2)';
+          text.innerHTML = '⚡ <b>Auto-Stop VAD:</b> Ready • Press Record, recording auto-stops on silence (' + data.silenceSec + 's)';
+          if (meterWrap) meterWrap.style.display = 'none';
+          break;
+
+        case 'listening':
+          dot.style.background = '#3b82f6';
+          dot.style.boxShadow = '0 0 0 4px rgba(59, 130, 246, 0.3)';
+          text.innerHTML = '🎙️ <b>Listening...</b> Speak your question now';
+          if (meterWrap) {
+            meterWrap.style.display = 'flex';
+            const pct = Math.min(100, Math.round((data.rms || 0) * 800));
+            if (meterBar) {
+              meterBar.style.width = pct + '%';
+              meterBar.style.background = '#3b82f6';
+            }
+            if (countdown) countdown.innerText = 'WAIT';
+          }
+          break;
+
+        case 'speaking':
+          dot.style.background = '#22c55e';
+          dot.style.boxShadow = '0 0 0 4px rgba(34, 197, 94, 0.4)';
+          text.innerHTML = '🗣️ <b>Voice detected:</b> Speaking...';
+          if (meterWrap) {
+            meterWrap.style.display = 'flex';
+            const pct = Math.min(100, Math.round((data.rms || 0) * 700));
+            if (meterBar) {
+              meterBar.style.width = Math.max(15, pct) + '%';
+              meterBar.style.background = '#22c55e';
+            }
+            if (countdown) countdown.innerText = 'MIC';
+          }
+          break;
+
+        case 'silence':
+          dot.style.background = '#f59e0b';
+          dot.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.3)';
+          text.innerHTML = '⏳ <b>Speech paused:</b> Stopping in ' + data.remainingSec + 's...';
+          if (meterWrap) {
+            meterWrap.style.display = 'flex';
+            if (meterBar) {
+              const targetMs = (data.silenceSec || 1.4) * 1000;
+              const progress = Math.min(100, Math.round(((data.silenceMs || 0) / targetMs) * 100));
+              meterBar.style.width = progress + '%';
+              meterBar.style.background = '#f59e0b';
+            }
+            if (countdown) countdown.innerText = data.remainingSec + 's';
+          }
+          break;
+
+        case 'stopping':
+          dot.style.background = '#8b5cf6';
+          dot.style.boxShadow = '0 0 0 4px rgba(139, 92, 246, 0.4)';
+          text.innerHTML = '⏹️ <b>Auto-stopped!</b> Submitting question to AI...';
+          if (meterWrap) {
+            meterWrap.style.display = 'flex';
+            if (meterBar) {
+              meterBar.style.width = '100%';
+              meterBar.style.background = '#8b5cf6';
+            }
+            if (countdown) countdown.innerText = 'DONE';
+          }
+          break;
+
+        case 'error':
+          dot.style.background = '#ef4444';
+          dot.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
+          text.innerHTML = '⚠️ <b>Auto-Stop:</b> ' + (data.message || 'Microphone access notice');
+          if (meterWrap) meterWrap.style.display = 'none';
+          break;
+      }
+    }
+
+    // 2. Configure master controller with current session options and local UI updater
+    if (parentWin.__iiitnr_vad_controller__) {
+      parentWin.__iiitnr_vad_controller__.configure({
+        enabled: currentEnabled,
+        silenceSec: currentSilenceSec,
+        onUpdate: updateWidgetUI
+      });
+    } else {
+      updateWidgetUI({ enabled: currentEnabled, state: 'idle', silenceSec: currentSilenceSec });
+    }
+  })();
+  </script>
+</body>
+"""
+
+
+def render_vad_controller(enabled: bool = True, silence_sec: float = 1.4) -> None:
+    """Embed client-side Voice Activity Detection (VAD) Auto-Stop controller.
+
+    Watches the Streamlit audio_input widget. When speech begins and is followed by
+    `silence_sec` seconds of quiet, it automatically triggers the stop-recording button
+    without requiring the user to manually click 'Stop recording'.
+    """
+    html_code = VAD_CONTROLLER_HTML_TEMPLATE.replace(
+        "__ENABLED__", "true" if enabled else "false"
+    ).replace(
+        "__SILENCE_SEC__", str(round(float(silence_sec), 1))
+    )
+    st.components.v1.html(html_code, height=44)
+
 
 
 # ──────────────────────────────────────────────
@@ -515,8 +1028,30 @@ def render_chat_view(
             }
             target_lang = lang_code_map[stt_lang_choice]
 
+            auto_stop_enabled = st.toggle(
+                "⚡ Auto-Stop on Silence",
+                value=st.session_state.get("vad_auto_stop", True),
+                key="vad_auto_stop_toggle",
+                help="Automatically stop recording when speech finishes (VAD auto-cutoff). No need to press Stop!",
+            )
+            st.session_state["vad_auto_stop"] = auto_stop_enabled
+
+            if auto_stop_enabled:
+                silence_cutoff = st.select_slider(
+                    "Silence Delay",
+                    options=[1.0, 1.2, 1.4, 1.6, 2.0],
+                    value=st.session_state.get("vad_silence_delay", 1.4),
+                    key="vad_silence_slider",
+                    format_func=lambda x: f"{x}s pause",
+                    help="Time to wait after speaking before automatically stopping.",
+                )
+                st.session_state["vad_silence_delay"] = silence_cutoff
+            else:
+                silence_cutoff = 1.4
+
         with v_col1:
             recorded_audio = st.audio_input("Record your question from microphone:")
+            render_vad_controller(enabled=auto_stop_enabled, silence_sec=silence_cutoff)
 
         if recorded_audio is not None:
             raw_audio = recorded_audio.getvalue()

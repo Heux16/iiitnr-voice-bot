@@ -158,7 +158,7 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
      - **MMS Silence Trimming**: Meta MMS 1B now trims leading/trailing silence before CTC decoding.
      - **Streamlit Toast Feedback**: Displays `st.toast(...)` showing transcribed text, language, and GPU latency in ms.
 1. **Conversational VAD & Turn-Taking Pause Tolerance**:
-   - _Cause_: `VAD_MIN_SILENCE_MS` was set to 100ms, `min_silence_duration_ms` in Faster-Whisper was 300ms, and `END_OF_SPEECH_SILENCE_MS` was 600ms. Whenever a speaker paused naturally while formulating a query (e.g. *"I want to know... [0.5s pause] ...CSE opening rank"*), the VAD immediately treated the pause as an end-of-speech cut, registering only the first clause and discarding or splitting the second clause into an isolated fragment.
+   - _Cause_: `VAD_MIN_SILENCE_MS` was set to 100ms, `min_silence_duration_ms` in Faster-Whisper was 300ms, and `END_OF_SPEECH_SILENCE_MS` was 600ms. Whenever a speaker paused naturally while formulating a query (e.g. _"I want to know\... [0.5s pause] ...CSE opening rank"_), the VAD immediately treated the pause as an end-of-speech cut, registering only the first clause and discarding or splitting the second clause into an isolated fragment.
    - _Fix_:
      - `min_silence_duration_ms` in Faster-Whisper increased from 300ms to **1,200ms** (with `speech_pad_ms=400` and `threshold=0.18`), preventing natural thinking pauses from fragmenting the sentence.
      - `END_OF_SPEECH_SILENCE_MS` increased from 600ms to **1,400ms** (1.4s), matching natural human conversational rhythms.
@@ -170,6 +170,17 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
      - `{log_id}_processed.wav`: The 16 kHz resampled, DC-offset-subtracted, and gain-normalized audio fed into the ASR models.
      - `{log_id}_meta.json`: Full diagnostic metadata including latency, SNR, peak, and transcription.
    - Streamlit Voice Inspector: The voice expander displays a side-by-side audio player for both Raw and Processed audio, so users and researchers can immediately listen to and verify audio quality differences.
+1. **Client-Side Auto-Stop Voice Activity Detection (VAD)**:
+   - _Feature_: In the Streamlit web app, users previously had to manually click the "Stop recording" button after speaking.
+   - _Implementation & Lifetime Resilience_:
+     - **Top-Window Head Injection**: Injects the master VAD controller script directly into `parentWin.document.head`. This decouples the watcher from Streamlit's ephemeral `components.html` iframes, preventing context destruction and cross-realm errors on reruns.
+     - **Hardware WASAPI Re-negotiation Fix**: Uses `track.enabled = false` rather than `track.stop()` during idle periods. Reusing the persistent `MediaStream` prevents Windows audio driver renegotiation locks (`track.muted`) on rapid subsequent questions.
+     - **Singleton AudioContext**: Reuses a single persistent `AudioContext` for VAD (`parentWin.__iiitnr_vad_audio_ctx__`) and one for TTS (`parentWin.__iiitnr_tts_audio_ctx__`). Total active contexts never exceed 2, permanently avoiding the Chromium 6-context hardware ceiling.
+     - **Continuous Turn-Taking**: State machine smoothly loops (`idle` -> `listening` -> `speaking` -> `silence` -> `stopping` -> `idle`) across infinite questions without page refreshes.
+     - Observes `[data-testid="stAudioInputActionButton"][aria-label*="Stop"]` and computes RMS energy at 25 FPS with dynamic noise-floor calibration.
+     - Once speech is detected, monitors pause duration. When silence persists for the user-configured cutoff (default: **1.4s**), programmatically invokes `.click()` on the stop button.
+     - Displays live animated badge in the UI (Idle: Ready 🟢, Listening 🔵, Speaking 🗣️, Silence countdown ⏳, Auto-stopped ⏹️).
+     - Includes safety bounds: 14s initial silence cutoff and 60s max recording guardrail. Manual stop remains 100% accessible anytime.
 
 ---
 
@@ -177,10 +188,10 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
 
 | File Path                       | Description                                                                                                               | Environment |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `app/main_streamlit.py`         | Main frontend UI, chat loop, voice recording widget (`st.audio_input`), Web Audio player embedding, and background queue. | `uajy-rag`  |
+| `app/main_streamlit.py`         | Main frontend UI, chat loop, voice recording widget (`st.audio_input`), client-side Auto-Stop VAD controller, Web Audio player embedding, and background queue. | `uajy-rag`  |
 | `app/prompt_builder.py`         | LLM prompt with strict Hindi output, number-to-words rule, and page citations.                                            | `uajy-rag`  |
 | `app/query_rewriter.py`         | Cross-lingual query rewriter (Chhattisgarhi, Hindi, Hinglish -> English search query with few-shots and Indic detection). | `uajy-rag`  |
-| `app/retrieval.py`              | Hybrid retriever (FAISS + BM25 + RRF) with Turn 1 cross-lingual rewrite triggers.                                        | `uajy-rag`  |
+| `app/retrieval.py`              | Hybrid retriever (FAISS + BM25 + RRF) with Turn 1 cross-lingual rewrite triggers.                                         | `uajy-rag`  |
 | `TTS/tts_server.py`             | FastAPI microservice for GPU VITS synthesis and WebSocket audio queueing (Port 8000).                                     | `minor1`    |
 | `STT/stt-service/run.py`        | Entry point for STT FastAPI server (Port 8001).                                                                           | `minor1`    |
 | `STT/stt-service/src/asr.py`    | Multilingual ASR abstraction (Faster-Whisper Turbo + Meta MMS 1B Chhattisgarhi).                                          | `minor1`    |
@@ -193,6 +204,7 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
 ## 6. Git Remote & Repository Setup
 
 The primary git remote has been configured for the dedicated IIIT-NR Voice Bot repository:
+
 - **Primary Remote (`origin`)**: `https://github.com/Heux16/iiitnr-voice-bot.git` (Branch: `main`)
 - **Legacy Backup Remote (`uajy-origin`)**: `https://github.com/Heux16/uajy-academic-rag-chatbot.git`
 - **Push Instruction**: Once the repo `iiitnr-voice-bot` is created on GitHub, publish local commits via:
@@ -207,7 +219,7 @@ The primary git remote has been configured for the dedicated IIIT-NR Voice Bot r
 To verify that the entire codebase remains intact:
 
 ```powershell
-# 1. Run all 479 core RAG & cross-lingual query rewriter unit tests
+# 1. Run all 480 core RAG & cross-lingual query rewriter unit tests
 Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
 & "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -m pytest tests/ -q
 
