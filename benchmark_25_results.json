@@ -1,0 +1,883 @@
+[
+  {
+    "id": "CG-01",
+    "topic": "Hostel & Mess Fee",
+    "expected_lang": "chhattisgarhi",
+    "question": "छात्रावास के फीस कतेक हे अउ मेस चार्ज कितना लगही?",
+    "stt": {
+      "status": "FAIL",
+      "latency_ms": 15013.6,
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=8001): Read timed out. (read timeout=15)"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 4.377,
+      "llm_sec": 1.49,
+      "total_rag_sec": 5.867,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What is the fee structure for hostel accommodation and mess charges at IIIT-NR?",
+      "top_source": "Page 6 (M.Tech (DSAI) with CMIT Fellowship 2026)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार! \n\nआईआईआईटी नया रायपुर के एम.टेक (डीएसएआई) विथ सीएमआईटी फेलोशिप दो हज़ार छब्बीस के दस्तावेज के मुताबिक, छात्रावास (हॉस्टल) के फीस पंद्रह हज़ार रुपिया अउ मेस एडवांस पच्चीस हज़ार रुपिया लगही। \n\n📄 Source: Page 6 — M.Tech (DSAI) with CMIT Fellowship 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 3,
+      "latency_ms": 1712.5,
+      "tts_status": "done",
+      "audio_len": 850108
+    }
+  },
+  {
+    "id": "CG-02",
+    "topic": "M.Tech Hostel Fee",
+    "expected_lang": "chhattisgarhi",
+    "question": "एमटेक बर हॉस्टल के फीस कतेक हावे?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 13480.6,
+      "server_ms": 547.0,
+      "detected_lang": "hne",
+      "text": "कम्पूटर सायनस"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 3.183,
+      "llm_sec": 0.996,
+      "total_rag_sec": 4.179,
+      "contexts_count": 2,
+      "was_rewritten": true,
+      "effective_query": "What is the hostel fee structure for M.Tech students at IIIT-NR?",
+      "top_source": "Page 6 (M.Tech (DSAI) with CMIT Fellowship 2026)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार! \n\nआईआईआईटी नया रायपुर म एमटेक (डीएसएआई) विथ सीएमआईटी फेलोशिप दो हज़ार छब्बीस बर हॉस्टल के फीस पंद्रह हज़ार रुपिया हावे।\n\n📄 Source: Page 6 — M.Tech (DSAI) with CMIT Fellowship 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 3,
+      "latency_ms": 556.3,
+      "tts_status": "done",
+      "audio_len": 595432
+    }
+  },
+  {
+    "id": "CG-03",
+    "topic": "CSE Admission Procedure",
+    "expected_lang": "chhattisgarhi",
+    "question": "जय जोहार, सीएसई म एडमिशन कइसे मिलही?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 118.4,
+      "server_ms": 109.0,
+      "detected_lang": "hne",
+      "text": "ई ट"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 2.647,
+      "llm_sec": 1.762,
+      "total_rag_sec": 4.409,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What is the admission procedure, eligibility criteria, and entrance exam requirement for B.Tech Computer Science and Engineering (CSE) at IIIT-NR?",
+      "top_source": "Page 5 (What is the admission criteria for B.Tech. programs?)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार! \n\nआईआईआईटी नया रायपुर के कंप्यूटर साइंस एंड इंजीनियरिंग (सीएसई) प्रोग्राम म एडमिशन संयुक्त प्रवेश परीक्षा (जेईई) म उम्मीदवार मन के प्रदर्शन के आधार पर मिलथे। एडमिशन पूरी तरह ले मेरिट के आधार पर होथिस। \n\nछत्तीसगढ़ कोटा बर पात्रता ए हावे कि उम्मीदवार मन ला बारहीं के परीक्षा म भौतिकी, रसायन शास्त्र अउ गणित म कुल पचास प्रतिशत अंक (अनुसूचित जाति, अनुसूचित जनजाति, अन्य पिछड़ा वर्ग अउ दिव्यांग उम्मीदवार मन बर पैंतालीस प्रतिशत) पाइन अनिवार्य हे। ऑल इंडिया कैटेगरी अउ एनटीपीसी कोटा बर पात्रता जोसा के नियम के अनुसार होथिस।\n\n📄 Source: Page 3 — B. Tech. Admissions 2026:-  Application for Spot Round",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 938.7,
+      "tts_status": "done",
+      "audio_len": 1672080
+    }
+  },
+  {
+    "id": "CG-04",
+    "topic": "B.Tech Branches Available",
+    "expected_lang": "chhattisgarhi",
+    "question": "IIIT नया रायपुर म बीटेक बर का का ब्रांच हावे?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 125.7,
+      "server_ms": 125.0,
+      "detected_lang": "hne",
+      "text": "ऊी"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 3.144,
+      "llm_sec": 1.066,
+      "total_rag_sec": 4.21,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What undergraduate B.Tech engineering branches and degree programs are offered at IIIT Naya Raipur?",
+      "top_source": "Page 5 (BTECH ADMISSION 2026)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार! \n\nआईआईआईटी नया रायपुर म बीटेक (अंडरग्रेजुएट्स) कार्यक्रम बर तीनठन मुख्य ब्रांच (शाखा) हावे, जेकर नांव नीचे लिखे गे हे:\n\n- कंप्यूटर साइंस एंड इंजीनियरिंग (CSE)\n- डेटा साइंस एंड आर्टिफिशियल इंटेलिजेंस (DSAI)\n- इलेक्ट्रॉनिक्स एंड कम्युनिकेशन इंजीनियरिंग (ECE)\n\n📄 Source: Page 5 — BTECH ADMISSION 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 789.9,
+      "tts_status": "done",
+      "audio_len": 803048
+    }
+  },
+  {
+    "id": "CG-05",
+    "topic": "Scholarship Eligibility",
+    "expected_lang": "chhattisgarhi",
+    "question": "स्कॉलरशिप बर कतेक नंबर लाना पड़ही संगी?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 145.8,
+      "server_ms": 109.0,
+      "detected_lang": "hne",
+      "text": "वत ईस ते ओपनिंग रांक अफ ससी"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 3.763,
+      "llm_sec": 1.461,
+      "total_rag_sec": 5.224,
+      "contexts_count": 2,
+      "was_rewritten": true,
+      "effective_query": "What are the eligibility criteria and minimum academic performance requirements in terms of marks or CGPA to get a scholarship at IIIT Naya Raipur?",
+      "top_source": "Page 4 (M.Tech (DSAI) with CMIT Fellowship 2026)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार! \n\nआईआईआईटी नया रायपुर के दस्तावेज के अनुसार, एम.टेक (डीएसएआई) सीएम आईटी फेलोशिप प्रोग्राम बर आवेदन करइया मन ल क्वालीफाइंग डिग्री म न्यूनतम छह दशमलव पांच सीपीआई (CPI) या साठ प्रतिशत या फर्स्ट क्लास होना अनिवार्य हे। साथ ही, एससी, एसटी, और पीडब्ल्यूडी उम्मीदवार मन बर पांच प्रतिशत अंक या शून्य दशमलव पांच सीपीआई की छूट दे जाथे। एखर अलावा, गेट (CS/DSAI) परीक्षा पास होना भी जरूरी हे।\n\n📄 Source: Page 4 — M.Tech (DSAI) with CMIT Fellowship 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 994.4,
+      "tts_status": "done",
+      "audio_len": 1578600
+    }
+  },
+  {
+    "id": "CG-06",
+    "topic": "Branch Sliding CPI",
+    "expected_lang": "chhattisgarhi",
+    "question": "ब्रांच बदले बर कतेक सीपीआई जरूरी हे?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 131.8,
+      "server_ms": 109.0,
+      "detected_lang": "hne",
+      "text": "वट ईस त ओबली"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 5.69,
+      "llm_sec": 5.858,
+      "total_rag_sec": 11.548,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What is the minimum CPI requirement for branch sliding/change at IIIT-NR?",
+      "top_source": "Page 20 (SYLLABUS BOOK)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार!\n\nमोला माफ करहू, ये जानकारी अभी के शैक्षणिक दस्तावेज म नइ मिले हे। अधिक सहायता बर शैक्षणिक कार्यालय ले संपर्क करहू।",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 3,
+      "latency_ms": 983.0,
+      "tts_status": "done",
+      "audio_len": 506044
+    }
+  },
+  {
+    "id": "CG-07",
+    "topic": "Mess Facilities",
+    "expected_lang": "chhattisgarhi",
+    "question": "हॉस्टल म मेस के सुविधा कइसन हे अउ खाना के व्यवस्था कइसे रहिथे?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 140.1,
+      "server_ms": 125.0,
+      "detected_lang": "hne",
+      "text": "वतिस ते ओकलिग रइंक अफ सस न थ"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 5.703,
+      "llm_sec": 7.636,
+      "total_rag_sec": 13.339,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "हॉस्टल म मेस के सुविधा कइसन हे अउ खाना के व्यवस्था कइसे रहिथे?",
+      "top_source": "Page 13 (Is hostel facility available? Are day-scholars allowed?)",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार!\n\nसंस्थान म हॉस्टल के मेस अउ खाना के व्यवस्था के जानकारी नीचे दिए अनुसार हे:\n\n- हॉस्टल म लइका अउ लइकी मन बर अलग-अलग डायनिंग (खाए के) सुविधा हावे।\n- संस्थान के मेस म शाकाहारी अउ मांसाहारी, दोनो किसम के भोजन परोसे जाथे।\n- मेस के संचालन अउ देख-रेख एक समिति करथे, जेमा छात्र, कर्मचारी अउ फैकल्टी सदस्य मन शामिल रहिथें।\n- एकर अलावा, एक ठन केंद्रीय कैंटीन घलो हावे जहाँ नाश्ता, शाकाहारी अउ मांसाहारी खाना, फास्ट फूड, जूस अउ दूध ले बने चीज़ मन मिलथे।\n\n📄 Source: Page 4 — BTECH ADMISSION 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 1116.0,
+      "tts_status": "done",
+      "audio_len": 877456
+    }
+  },
+  {
+    "id": "CG-08",
+    "topic": "Hostel Fees (Romanized Chhattisgarhi)",
+    "expected_lang": "chhattisgarhi",
+    "question": "hostel ke fees katek he aau mess charge kitna laghi",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 83.3,
+      "server_ms": 63.0,
+      "detected_lang": "hne",
+      "text": "ईस का ब तऊ"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 2.319,
+      "llm_sec": 1.46,
+      "total_rag_sec": 3.779,
+      "contexts_count": 0,
+      "was_rewritten": true,
+      "effective_query": "What",
+      "top_source": "None",
+      "detected_lang": "chhattisgarhi",
+      "response_text": "जय जोहार! \n\nमोला माफ करहू, ये जानकारी अभी के शैक्षणिक दस्तावेज म नइ मिले हे। अधिक सहायता बर शैक्षणिक कार्यालय ले संपर्क करहू।\n\n📄 Source: Page 0 — Section Title",
+      "has_citation": true,
+      "guard_diagnostic": [
+        "citation_outside_context",
+        "Page citation 0 is not in retrieval context; available pages: none."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 560.9,
+      "tts_status": "done",
+      "audio_len": 525160
+    }
+  },
+  {
+    "id": "HI-01",
+    "topic": "M.Tech Hostel Fee",
+    "expected_lang": "hindi",
+    "question": "एमटेक (डीएसएआई) के लिए प्रति सेमेस्टर छात्रावास का शुल्क कितना है?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 617.6,
+      "server_ms": 609.0,
+      "detected_lang": "hi",
+      "text": "मुझे 2022 का opening rank बताओ CSE का."
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 2.402,
+      "llm_sec": 1.25,
+      "total_rag_sec": 3.652,
+      "contexts_count": 0,
+      "was_rewritten": true,
+      "effective_query": "What is",
+      "top_source": "None",
+      "detected_lang": "hindi",
+      "response_text": "मुझे क्षमा करें, यह जानकारी उपलब्ध दस्तावेजों में नहीं मिली है। कृपया आगे की सहायता के लिए शैक्षणिक कार्यालय से संपर्क करें।",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 473.0,
+      "tts_status": "done",
+      "audio_len": 475964
+    }
+  },
+  {
+    "id": "HI-02",
+    "topic": "B.Tech CSE Admission",
+    "expected_lang": "hindi",
+    "question": "आईआईआईटी नया रायपुर में बीटेक सीएसई में प्रवेश कैसे मिलता है?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 502.5,
+      "server_ms": 469.0,
+      "detected_lang": "hi",
+      "text": "ये कॉलेज के पूरा नाम काय है?"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 3.575,
+      "llm_sec": 1.918,
+      "total_rag_sec": 5.493,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What is the admission procedure, eligibility criteria, and entrance exam requirement for B.Tech Computer Science and Engineering (CSE) at IIIT Naya Raipur?",
+      "top_source": "Page 5 (What is the admission criteria for B.Tech. programs?)",
+      "detected_lang": "hindi",
+      "response_text": "आईआईआईटी नया रायपुर में बीटेक प्रोग्राम्स में प्रवेश पूरी तरह से संयुक्त प्रवेश परीक्षा (जेईई मेन) के प्रदर्शन और रैंक के आधार पर मेरिट के अनुसार मिलता है। प्रवेश के लिए तीन मुख्य श्रेणियां हैं:\n\n- ऑल इंडिया कोटा: इस श्रेणी की सीटें जोसा (JoSAA) काउंसलिंग के माध्यम से भरी जाती हैं।\n- छत्तीसगढ़ कोटा और एनटीपीसी कोटा: इस श्रेणी के अंतर्गत छत्तीसगढ़ राज्य के स्कूलों से दसवीं और बारहवीं कक्षा उत्तीर्ण करने वाले या एनटीपीसी के कर्मचारियों और उनके बच्चों के लिए सीटें आरक्षित होती हैं, जो आईआईआईटी नया रायपुर की ऑनलाइन काउंसलिंग प्रक्रिया के माध्यम से भरी जाती हैं। इसके लिए बारहवीं कक्षा में रसायन विज्ञान, भौतिकी और गणित में कुल पचास प्रतिशत अंक (अनुसूचित जाति, अनुसूचित जनजाति, अन्य पिछड़ा वर्ग और दिव्यांग उम्मीदवारों के लिए पैंतालीस प्रतिशत अंक) होना अनिवार्य है।\n\nछत्तीसगढ़ कोटा के तहत कंप्यूटर साइंस इंजीनियरिंग (सीएसई) में कुल पैंतालीस सीटें उपलब्ध हैं।\n\n📄 Source: Page 9 — eligibility will be as per the business rules of JoSAA/CSAB 2026. All",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 934.9,
+      "tts_status": "done",
+      "audio_len": 1853672
+    }
+  },
+  {
+    "id": "HI-03",
+    "topic": "Branch Sliding Requirement",
+    "expected_lang": "hindi",
+    "question": "शाखा परिवर्तन (ब्रांच स्लाइडिंग) के लिए न्यूनतम सीपीआई की आवश्यकता क्या है?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 592.7,
+      "server_ms": 594.0,
+      "detected_lang": "hi",
+      "text": "प्रिपल आईटी"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 3.706,
+      "llm_sec": 1.164,
+      "total_rag_sec": 4.87,
+      "contexts_count": 0,
+      "was_rewritten": true,
+      "effective_query": "What is the minimum CPI requirement for branch sliding at IIIT-NR?",
+      "top_source": "None",
+      "detected_lang": "hindi",
+      "response_text": "मुझे क्षमा करें, यह जानकारी उपलब्ध दस्तावेजों में नहीं मिली है। कृपया आगे की सहायता के लिए शैक्षणिक कार्यालय से संपर्क करें।",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 360.4,
+      "tts_status": "done",
+      "audio_len": 484156
+    }
+  },
+  {
+    "id": "HI-04",
+    "topic": "Fellowship & Scholarship Rules",
+    "expected_lang": "hindi",
+    "question": "छात्रवृत्ति और सीएमआईटी फेलोशिप के नियम क्या हैं?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 606.0,
+      "server_ms": 594.0,
+      "detected_lang": "hi",
+      "text": "What is the opening rank of DSAI in 2022?"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 3.376,
+      "llm_sec": 2.152,
+      "total_rag_sec": 5.528,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What are the rules, eligibility criteria, and guidelines for scholarships and CMIT fellowships at IIIT-NR?",
+      "top_source": "Page 4 (M.Tech (DSAI) with CMIT Fellowship 2026)",
+      "detected_lang": "hindi",
+      "response_text": "छात्रवृत्ति और सीएमआईटी फेलोशिप के नियम और मुख्य विशेषताएं निम्नलिखित हैं:\n\n- छत्तीसगढ़ शासन द्वारा प्रायोजित फेलोशिप की राशि पहले और दूसरे दोनों वर्षों में पचास हज़ार रुपये प्रति माह है।\n- छत्तीसगढ़ शासन द्वारा ट्यूशन शुल्क दो लाख रुपये तक प्रायोजित किया जाता है।\n- एक छात्र वैध गेट स्कोर होने पर भी सीएमआईटी फेलोशिप के अलावा एआईसीटीई फेलोशिप यानी बारह हज़ार पाँच सौ रुपये की राशि एक साथ प्राप्त नहीं कर सकता है, क्योंकि छात्र एक साथ दो फेलोशिप का लाभ नहीं उठा सकता है।\n- छत्तीसगढ़ शासन केवल ट्यूशन शुल्क का वित्तपोषण करता है। अन्य सभी खर्चों जैसे हॉस्टल आवास, मेस, परीक्षा शुल्क, चिकित्सा बीमा, और सैक (एसएसी) शुल्क आदि का वहन फेलोशिप प्राप्तकर्ताओं (छात्रों को) खुद करना होगा।\n\n📄 Source: Page 3 — M.Tech (DSAI) with CMIT Fellowship 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 919.4,
+      "tts_status": "done",
+      "audio_len": 1674812
+    }
+  },
+  {
+    "id": "HI-05",
+    "topic": "Study Leave Duration",
+    "expected_lang": "hindi",
+    "question": "अकादमिक अवकाश (स्टडी लीव) लेने की प्रक्रिया और अधिकतम अवधि क्या है?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 601.8,
+      "server_ms": 594.0,
+      "detected_lang": "hi",
+      "text": "What is the opening rank of DSAI in 2022?"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 3.749,
+      "llm_sec": 1.387,
+      "total_rag_sec": 5.136,
+      "contexts_count": 0,
+      "was_rewritten": true,
+      "effective_query": "What is the procedure and maximum duration allowed for taking academic leave of absence at IIIT-NR?",
+      "top_source": "None",
+      "detected_lang": "hindi",
+      "response_text": "मुझे क्षमा करें, यह जानकारी उपलब्ध दस्तावेजों में नहीं मिली है। कृपया आगे की सहायता के लिए शैक्षणिक कार्यालय से संपर्क करें।",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 420.1,
+      "tts_status": "done",
+      "audio_len": 462312
+    }
+  },
+  {
+    "id": "HI-06",
+    "topic": "Attendance Rules",
+    "expected_lang": "hindi",
+    "question": "परीक्षा में बैठने के लिए न्यूनतम उपस्थिति (अटेंडेंस) कितनी अनिवार्य है?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 896.8,
+      "server_ms": 891.0,
+      "detected_lang": "hi",
+      "text": "प्रिपल आईटी नया रायपुर कहां स्थित है?"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 6.178,
+      "llm_sec": 4.893,
+      "total_rag_sec": 11.071,
+      "contexts_count": 4,
+      "was_rewritten": true,
+      "effective_query": "What is the minimum mandatory attendance percentage required for students to sit for examinations at IIIT-NR?",
+      "top_source": "Page 13 (Is hostel facility available? Are day-scholars allowed?)",
+      "detected_lang": "hindi",
+      "response_text": "मुझे क्षमा करें, यह जानकारी उपलब्ध दस्तावेजों में नहीं मिली है। कृपया आगे की सहायता के लिए शैक्षणिक कार्यालय से संपर्क करें।",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 913.3,
+      "tts_status": "done",
+      "audio_len": 473232
+    }
+  },
+  {
+    "id": "HI-07",
+    "topic": "Institute Location",
+    "expected_lang": "hindi",
+    "question": "संस्थान का परिसर कहाँ स्थित है और इसका पता क्या है?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 640.1,
+      "server_ms": 625.0,
+      "detected_lang": "hi",
+      "text": "IIIT Naya Raipur कहां स्थित है?"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 2.682,
+      "llm_sec": 2.528,
+      "total_rag_sec": 5.21,
+      "contexts_count": 0,
+      "was_rewritten": false,
+      "effective_query": "संस्थान का परिसर कहाँ स्थित है और इसका पता क्या है?",
+      "top_source": "None",
+      "detected_lang": "hindi",
+      "response_text": "मुझे क्षमा करें, यह जानकारी उपलब्ध दस्तावेजों में नहीं मिली है। कृपया आगे की सहायता के लिए शैक्षणिक कार्यालय से संपर्क करें।",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 531.9,
+      "tts_status": "done",
+      "audio_len": 478012
+    }
+  },
+  {
+    "id": "HI-08",
+    "topic": "Admission Eligibility (Hinglish)",
+    "expected_lang": "hindi",
+    "question": "btech admission ke liye minimum eligibility criteria kya hai aur josaa counselling kab hoti hai",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 705.5,
+      "server_ms": 672.0,
+      "detected_lang": "hi",
+      "text": "IIIT नया रायपुर कहां स्थित है?"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 6.595,
+      "llm_sec": 10.448,
+      "total_rag_sec": 17.043,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "btech admission ke liye minimum eligibility criteria kya hai aur josaa counselling kab hoti hai",
+      "top_source": "Page 5 (What is the admission criteria for B.Tech. programs?)",
+      "detected_lang": "hindi",
+      "response_text": "बी.टेक. कार्यक्रम में प्रवेश के लिए न्यूनतम पात्रता मानदंड इस प्रकार हैं:\n\n- **छत्तीसगढ़ कोटा:** \n  - अभ्यर्थियों को केवल छत्तीसगढ़ राज्य के स्कूलों से दसवीं और बारहवीं कक्षा की परीक्षा उत्तीर्ण करनी अनिवार्य है।\n  - बारहवीं कक्षा में रसायन विज्ञान, भौतिकी और गणित विषयों में कुल मिलाकर न्यूनतम पचास प्रतिशत अंक होने चाहिए (अनुसूचित जाति, अनुसूचित जनजाति, अन्य पिछड़ा वर्ग और दिव्यांग अभ्यर्थियों के लिए पैंतालीस प्रतिशत अंक)।\n  - अभ्यर्थी की जन्म तिथि एक अक्टूबर दो हज़ार या उसके बाद की होनी चाहिए (आरक्षित श्रेणियों के लिए ऊपरी आयु सीमा में तीन वर्ष की छूट है, यानी उनकी जन्म तिथि एक अक्टूबर उन्नीस सौ सत्तानवे या उसके बाद होनी चाहिए)।\n  - अभ्यर्थी ने अपनी बारहवीं कक्षा या समकक्ष परीक्षा दो हज़ार चौबीस, दो हज़ार पच्चीस या दो हज़ार छब्बीस में उत्तीर्ण की हो।\n\n- **अखिल भारतीय कोटा और एनटीपीसी कोटा:** \n  - इन कोटों के तहत पात्रता जोसा या सीएसएबी दो हज़ार छब्बीस के नियमों के अनुसार होती है।\n\nप्रवेश पूरी तरह से जेईई (मेन) दो हज़ार छब्बीस में अभ्यर्थी के प्रदर्शन के आधार पर होता है।\n\nजहाँ तक जोसा काउंसलिंग की तारीख का प्रश्न है, जोसा काउंसलिंग की विशिष्ट तिथियों या समय-सारणी की जानकारी उपलब्ध दस्तावेजों में नहीं दी गई है।\n\n📄 Source: Page 9 — eligibility will be as per the business rules of JoSAA/CSAB 2026. All",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 1731.8,
+      "tts_status": "done",
+      "audio_len": 738236
+    }
+  },
+  {
+    "id": "EN-01",
+    "topic": "Hostel & Mess Fees",
+    "expected_lang": "english",
+    "question": "What is the fee for the hostel accommodation and mess charges?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 683.2,
+      "server_ms": 641.0,
+      "detected_lang": "hi",
+      "text": "IIIT Naya Raipur कैसे बहु सकते हैं?"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 2.513,
+      "llm_sec": 1.41,
+      "total_rag_sec": 3.923,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "What is the fee for the hostel accommodation and mess charges?",
+      "top_source": "Page 15 (Fee Type Amount)",
+      "detected_lang": "english",
+      "response_text": "The hostel fee is fifteen thousand rupees and the mess advance is twenty-five thousand rupees.\n\n📄 Source: Page 15 — Fee Type Amount",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 10.4,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-02",
+    "topic": "Leave of Absence Policy",
+    "expected_lang": "english",
+    "question": "What is the procedure and maximum duration for academic leave of absence?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 854.0,
+      "server_ms": 844.0,
+      "detected_lang": "hi",
+      "text": "और मैं आप से क्या जान सकता हूँ?"
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 0.675,
+      "llm_sec": 1.621,
+      "total_rag_sec": 2.296,
+      "contexts_count": 0,
+      "was_rewritten": false,
+      "effective_query": "What is the procedure and maximum duration for academic leave of absence?",
+      "top_source": "None",
+      "detected_lang": "english",
+      "response_text": "I apologize, but this information was not found in the available academic documents. Please contact the academic office for further assistance.",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 24.6,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-03",
+    "topic": "M.Tech DSAI Fellowship",
+    "expected_lang": "english",
+    "question": "What are the eligibility criteria and fellowship amount for M.Tech DSAI?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 861.6,
+      "server_ms": 844.0,
+      "detected_lang": "hi",
+      "text": "कतक जन मन पढ़ाते Naya Raipurma"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 2.946,
+      "llm_sec": 2.3,
+      "total_rag_sec": 5.246,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "What are the eligibility criteria and fellowship amount for M.Tech DSAI?",
+      "top_source": "Page 4 (M.Tech (DSAI) with CMIT Fellowship 2026)",
+      "detected_lang": "english",
+      "response_text": "A candidate seeking admission into the Master of Technology in Data Science and Artificial Intelligence with the Chief Minister Information Technology Fellowship program has to satisfy the following eligibility requirements:\n\n- Nationality and Domicile: The candidate must be a citizen of India and a domicile of Chhattisgarh.\n- Age Limit: Up to thirty years as of the application deadline. Age relaxations are applicable as per Chhattisgarh Government reservation rules.\n- Educational Qualification and GATE: Any graduate or postgraduate student with a Graduate Aptitude Test in Engineering in Computer Science or Data Science and Artificial Intelligence qualification, and a minimum cumulative performance index of six point five, or sixty percent, or first class in the qualifying degree. A relaxation of five percent marks or zero point five cumulative performance index is provided for Scheduled Caste, Scheduled Tribe, and Persons with Disabilities candidates.\n- Reservation Policy: Reservation is applicable as per the Chhattisgarh State Reservation Policy.\n\nRegarding the fellowship amount:\n- Fellows receive fifty thousand rupees per month in both the first and second years, sponsored by the Government of Chhattisgarh.\n\n📄 Source: Page 4 — M.Tech (DSAI) with CMIT Fellowship 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 28.3,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-04",
+    "topic": "Branch Change Minimum CPI",
+    "expected_lang": "english",
+    "question": "What is the minimum CPI required for branch change after the first year?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 959.1,
+      "server_ms": 937.0,
+      "detected_lang": "hi",
+      "text": "कतक टीचर मन हावे, गिंती मान आयरापुर B.Tech M.Tech, M."
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 0.754,
+      "llm_sec": 1.092,
+      "total_rag_sec": 1.846,
+      "contexts_count": 0,
+      "was_rewritten": false,
+      "effective_query": "What is the minimum CPI required for branch change after the first year?",
+      "top_source": "None",
+      "detected_lang": "english",
+      "response_text": "I apologize, but this information was not found in the available academic documents. Please contact the academic office for further assistance.",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 10.5,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-05",
+    "topic": "Academic Programs",
+    "expected_lang": "english",
+    "question": "What are the available academic programs and branches offered at IIIT-NR?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 887.4,
+      "server_ms": 875.0,
+      "detected_lang": "hi",
+      "text": "जैदोहार ना, Raipur मासी ECE के फीस कत्ये खावे."
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 2.176,
+      "llm_sec": 1.851,
+      "total_rag_sec": 4.027,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "What are the available academic programs and branches offered at IIIT-NR?",
+      "top_source": "Page 5 (BTECH ADMISSION 2026)",
+      "detected_lang": "english",
+      "response_text": "The institute currently offers several undergraduate, postgraduate, and doctoral programs. \n\nFirst, the undergraduate programs have a duration of four years and include the following branches:\n- Bachelor of Technology in Computer Science and Engineering\n- Bachelor of Technology in Electronics and Communication Engineering\n- Bachelor of Technology in Data Science and Artificial Intelligence\n\nSecond, the postgraduate programs have a duration of two years and include:\n- Master of Technology in Electronics and Communication Engineering with specialisation in Communication and Signal Processing\n- Master of Technology in Electronics and Communication Engineering with specialization in VLSI and Embedded Systems\n- Master of Technology in Computer Science and Engineering with specialization in Data Science and Artificial Intelligence\n- Master of Technology in Computer Science and Engineering with specialization in Information Security\n- Master of Technology in Data Science and Artificial Intelligence with Computer Management and Information Technology Fellowship\n- Master of Science by Research, which has a duration of three years\n\nThird, doctoral programs are offered in various disciplines, including:\n- Doctor of Philosophy in Computer Science and Engineering\n- Doctor of Philosophy in Electronics and Communication Engineering\n- Doctor of Philosophy in Mathematics\n- Doctor of Philosophy in Physics\n- Doctor of Philosophy in Management\n- Doctor of Philosophy in Humanities or English\n\n📄 Source: Page 5 — BTECH ADMISSION 2026",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 14.3,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-06",
+    "topic": "Attendance Requirement",
+    "expected_lang": "english",
+    "question": "What are the attendance requirements to appear in the end semester examination?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 991.1,
+      "server_ms": 985.0,
+      "detected_lang": "hi",
+      "text": "जैदोहार ना, Raipur मासी ECE के फीस कत्ये खावे."
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 5.337,
+      "llm_sec": 5.929,
+      "total_rag_sec": 11.266,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "What are the attendance requirements to appear in the end semester examination?",
+      "top_source": "Page 363 (Semester VI)",
+      "detected_lang": "english",
+      "response_text": "I apologize, but this information was not found in the available academic documents. Please contact the academic office for further assistance.",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 41.5,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-07",
+    "topic": "Campus Location & Reach",
+    "expected_lang": "english",
+    "question": "Where is IIIT Naya Raipur campus located and how to reach there?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 1337.9,
+      "server_ms": 1328.0,
+      "detected_lang": "hi",
+      "text": "टे काई काय कर सकत है, सो."
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 4.354,
+      "llm_sec": 8.203,
+      "total_rag_sec": 12.557,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "Where is IIIT Naya Raipur campus located and how to reach there?",
+      "top_source": "Page 18 (About IIIT Naya Raipur (Part A))",
+      "detected_lang": "english",
+      "response_text": "The International Institute of Information Technology Naya Raipur is located at Plot Number seven, Sector twenty-four, near Purkhoti Muktangan, Atal Nagar, Nava Raipur, Chhattisgarh. The fifty-acre residential campus is situated approximately twenty-three kilometers from the city of Raipur.\n\nTo reach the campus, Raipur is well connected by air, rail, and road to all parts of the country. Online map routes to the campus are available from both the Raipur Railway Station and the Raipur Airport.\n\n📄 Source: Page 14 — Table of Contents",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 58.7,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-08",
+    "topic": "Grading & SPI Calculation",
+    "expected_lang": "english",
+    "question": "What is the grading policy and how is Semester Performance Index calculated?",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 1402.4,
+      "server_ms": 1390.0,
+      "detected_lang": "hi",
+      "text": "एक कॉलेज में कत्ता, गुरू जहनमैन पढ़ा थे."
+    },
+    "rag": {
+      "status": "GUARD_FLAG",
+      "retrieval_sec": 3.479,
+      "llm_sec": 2.412,
+      "total_rag_sec": 5.891,
+      "contexts_count": 0,
+      "was_rewritten": false,
+      "effective_query": "What is the grading policy and how is Semester Performance Index calculated?",
+      "top_source": "None",
+      "detected_lang": "english",
+      "response_text": "I apologize, but this information was not found in the available academic documents. Please contact the academic office for further assistance.",
+      "has_citation": false,
+      "guard_diagnostic": [
+        "missing_page_citation",
+        "Answer does not contain a citation in 'Page N' format."
+      ]
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 2,
+      "latency_ms": 42.9,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  },
+  {
+    "id": "EN-09",
+    "topic": "Vocational Training Hostel",
+    "expected_lang": "english",
+    "question": "Tell me about the vocational training programme hostel accommodation and charges.",
+    "stt": {
+      "status": "PASS",
+      "latency_ms": 737.6,
+      "server_ms": 719.0,
+      "detected_lang": "en",
+      "text": "P.Tech, M.Tech"
+    },
+    "rag": {
+      "status": "PASS",
+      "retrieval_sec": 4.636,
+      "llm_sec": 1.574,
+      "total_rag_sec": 6.21,
+      "contexts_count": 4,
+      "was_rewritten": false,
+      "effective_query": "Tell me about the vocational training programme hostel accommodation and charges.",
+      "top_source": "Page 1 (Vocational Training Programme)",
+      "detected_lang": "english",
+      "response_text": "For hostel accommodation during the vocational training programme, hostel rooms are available on campus. The charges are fifty rupees per day or fifteen hundred rupees for the entire vocational training duration of forty-five days. Additionally, a canteen and mess are available to provide food on a pay-and-eat basis. For any hostel and mess related queries or issues, you may contact Mr. Lalit Markanday via email at lalit at iiitnr dot edu dot in or mobile number eight one two zero zero seven eight nine zero four.\n\n📄 Source: Page 1 — Vocational Training Programme",
+      "has_citation": true,
+      "guard_diagnostic": null
+    },
+    "tts": {
+      "status": "PASS",
+      "chunks_sent": 4,
+      "latency_ms": 36.0,
+      "tts_status": "done",
+      "audio_len": 0
+    }
+  }
+]

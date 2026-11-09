@@ -128,7 +128,7 @@ class RetrievalConfig:
     #: Dengan task-type embedding, skor cosine berada di pita tinggi dan
     #: overlap dengan pertanyaan OOS. Ini hanya lantai kewajaran; reranker
     #: adalah gate presisi.
-    dense_threshold: float = 0.70
+    dense_threshold: float = 0.65
     lexical_coverage_threshold: float = 0.60
     rerank_min_score: float = 4.0
 

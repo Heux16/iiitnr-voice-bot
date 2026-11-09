@@ -63,3 +63,15 @@ class TestAnswerGuard:
         assert diagnosis is not None
         assert diagnosis[0] == "provider_models_unavailable"
         assert "disabled or unavailable" in diagnosis[1]
+
+    def test_safe_refusal_not_flagged_as_missing_citation(self):
+        chhattisgarhi_refusal = "मोला माफ करहू, ये जानकारी अभी के शैक्षणिक दस्तावेज म **नइ मिले हे**।"
+        hindi_refusal = "मुझे क्षमा करें, यह जानकारी वर्तमान में उपलब्ध शैक्षणिक दस्तावेजों में **नहीं मिली** है।"
+        english_refusal = "I apologize, this information was **not found** in the currently available academic documents."
+
+        assert diagnose_answer(chhattisgarhi_refusal, set()) is None
+        assert diagnose_answer(hindi_refusal, set()) is None
+        assert diagnose_answer(english_refusal, set()) is None
+        assert is_safe_answer(chhattisgarhi_refusal) is True
+        assert is_safe_answer(hindi_refusal) is True
+        assert is_safe_answer(english_refusal) is True

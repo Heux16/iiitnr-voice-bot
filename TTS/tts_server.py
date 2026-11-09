@@ -12,7 +12,7 @@ import time
 import json
 import base64
 import asyncio
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple, Any
 import numpy as np
 import scipy.io.wavfile as wavfile
 
@@ -130,11 +130,14 @@ def convert_numbers_in_text(text: str) -> str:
 
 
 def clean_text_for_tts(text: str) -> str:
-    """Strip markdown, citations, symbols, and normalize numbers to Hindi words."""
+    """Strip markdown, citations, symbols, and normalize numbers to words."""
     # Remove source lines (📄 Source: Page N ...)
     text = re.sub(r'(?:📄|\ud83d\udcc4)?\s*(?:Source|Page|स्रोत).*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
-    # Convert digits/amounts/percentages to Hindi words
-    text = convert_numbers_in_text(text)
+    # Check if text contains Devanagari characters
+    has_devanagari = bool(re.search(r"[\u0900-\u097F]", text))
+    if has_devanagari:
+        # Convert digits/amounts/percentages to Hindi words only for Devanagari text
+        text = convert_numbers_in_text(text)
     # Remove markdown headers and formatting
     text = re.sub(r'#+\s*', '', text)
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
@@ -147,14 +150,55 @@ def clean_text_for_tts(text: str) -> str:
     return text
 
 
+def synthesize_english_sapi(text: str, voice: str = "Female") -> Tuple[Optional[np.ndarray], Optional[bytes], float]:
+    """Synthesize English text using Windows SAPI (Zira for Female, David for Male) at 22050Hz."""
+    try:
+        import pythoncom
+        import win32com.client
+        pythoncom.CoInitialize()
+        speaker = None
+        stream = None
+        try:
+            speaker = win32com.client.Dispatch("SAPI.SpVoice")
+            target_name = "Zira" if voice.lower() == "female" else "David"
+            for v in speaker.GetVoices():
+                if target_name.lower() in v.GetDescription().lower():
+                    speaker.Voice = v
+                    break
+            stream = win32com.client.Dispatch("SAPI.SpMemoryStream")
+            stream.Format.Type = 22  # SAFT22kHz16BitMono
+            speaker.AudioOutputStream = stream
+            speaker.Rate = 0  # 1.0X normal speed
+            speaker.Speak(text)
+            raw_pcm = bytes(stream.GetData())
+            pcm_arr = np.frombuffer(raw_pcm, dtype=np.int16)
+            if len(pcm_arr) == 0:
+                return None, None, 0.0
+
+            buf = io.BytesIO()
+            wavfile.write(buf, 22050, pcm_arr)
+            wav_bytes = buf.getvalue()
+
+            dur = len(pcm_arr) / 22050.0
+            wav_arr = pcm_arr.astype(np.float32) / 32767.0
+            return wav_arr, wav_bytes, dur
+        finally:
+            del speaker
+            del stream
+            pythoncom.CoUninitialize()
+    except Exception as e:
+        print(f"[SAPI Warning] English synthesis error: {e}")
+        return None, None, 0.0
+
+
 def get_engine(voice: str = "Female") -> StreamingChhattisgarhiTTS:
     voice_key = "Male" if voice.lower() == "male" else "Female"
     if voice_key not in tts_engines:
-        print(f"[TTS Server] Initializing {voice_key} voice on GPU...")
+        print(f"[TTS Server] Initializing {voice_key} voice on GPU (1.25x speed)...")
         tts_engines[voice_key] = StreamingChhattisgarhiTTS(
             voice=voice_key,
             use_cuda=True,
-            length_scale=1.15
+            length_scale=0.80
         )
     return tts_engines[voice_key]
 
@@ -173,6 +217,8 @@ class AudioSession:
         self.worker_task: Optional[asyncio.Task] = None
         self.created_at = time.time()
         self.is_done = False
+        self.packet_history: List[Tuple[str, Any]] = []
+        self.packet_event: asyncio.Event = asyncio.Event()
 
 
 active_sessions: Dict[str, AudioSession] = {}
@@ -181,7 +227,8 @@ active_sessions: Dict[str, AudioSession] = {}
 async def session_gpu_worker(session: AudioSession):
     """
     Dedicated GPU worker task running concurrently in the background.
-    Synthesizes sentences and streams them to the browser over WebSocket.
+    Synthesizes sentences and buffers packets so any WebSocket client (connected
+    before, during, or after synthesis) receives the full, ordered audio stream.
     """
     engine = get_engine(session.voice)
     while True:
@@ -189,43 +236,69 @@ async def session_gpu_worker(session: AudioSession):
         if text_item is None:
             # End of session sentinel
             session.is_done = True
-            if session.websocket:
-                try:
-                    await session.websocket.send_text(json.dumps({"type": "done"}))
-                except Exception:
-                    pass
+            done_meta = json.dumps({"type": "done"})
+            session.packet_history.append(("text", done_meta))
+            session.packet_event.set()
             session.text_queue.task_done()
             break
 
         clean_text = clean_text_for_tts(text_item)
         if clean_text:
-            def run_synthesis():
-                t0 = time.time()
-                wav = engine.synthesizer.tts(text=clean_text)
-                wav_arr = np.array(wav, dtype=np.float32)
-                dur = len(wav_arr) / engine.sample_rate
-
-                max_val = np.max(np.abs(wav_arr))
-                norm_audio = (wav_arr / max_val * 32767).astype(np.int16) if max_val > 0 else (wav_arr * 32767).astype(np.int16)
-
-                buf = io.BytesIO()
-                wavfile.write(buf, engine.sample_rate, norm_audio)
-                return wav_arr, buf.getvalue(), dur, time.time() - t0
-
-            try:
-                wav_arr, wav_bytes, dur, infer_time = await asyncio.to_thread(run_synthesis)
-                session.chunks.append(wav_arr)
-
-                if session.websocket:
-                    await session.websocket.send_text(json.dumps({
+            has_devanagari = bool(re.search(r"[\u0900-\u097F]", clean_text))
+            if not has_devanagari:
+                # English sentence: synthesize via native Windows SAPI at 22050Hz
+                wav_arr, wav_bytes, dur = await asyncio.to_thread(synthesize_english_sapi, clean_text, session.voice)
+                if wav_bytes and wav_arr is not None:
+                    session.chunks.append(wav_arr)
+                    meta_json = json.dumps({
                         "type": "chunk_meta",
                         "text": clean_text,
                         "duration": round(dur, 2)
-                    }))
-                    await session.websocket.send_bytes(wav_bytes)
-                print(f"[Worker] Synthesized {dur:.2f}s in {infer_time:.3f}s on GPU. Pushed to WebSocket.")
-            except Exception as e:
-                print(f"[Worker Error] Synthesis failed on '{clean_text}': {e}")
+                    })
+                    session.packet_history.append(("text", meta_json))
+                    session.packet_history.append(("bytes", wav_bytes))
+                    session.packet_event.set()
+                    print(f"[Worker] Synthesized English {dur:.2f}s via SAPI. Packets: {len(session.packet_history)}")
+                else:
+                    # Fallback to browser Web Speech API if SAPI is unavailable
+                    dur = round(max(0.8, len(clean_text.split()) * 0.35), 2)
+                    meta_json = json.dumps({
+                        "type": "chunk_meta",
+                        "text": clean_text,
+                        "duration": dur
+                    })
+                    session.packet_history.append(("text", meta_json))
+                    session.packet_event.set()
+                    print(f"[Worker] Delegated English sentence to client Web Speech: '{clean_text}'")
+            else:
+                def run_synthesis():
+                    t0 = time.time()
+                    wav = engine.synthesizer.tts(text=clean_text)
+                    wav_arr = np.array(wav, dtype=np.float32)
+                    dur = len(wav_arr) / engine.sample_rate
+
+                    max_val = np.max(np.abs(wav_arr))
+                    norm_audio = (wav_arr / max_val * 32767).astype(np.int16) if max_val > 0 else (wav_arr * 32767).astype(np.int16)
+
+                    buf = io.BytesIO()
+                    wavfile.write(buf, engine.sample_rate, norm_audio)
+                    return wav_arr, buf.getvalue(), dur, time.time() - t0
+
+                try:
+                    wav_arr, wav_bytes, dur, infer_time = await asyncio.to_thread(run_synthesis)
+                    session.chunks.append(wav_arr)
+
+                    meta_json = json.dumps({
+                        "type": "chunk_meta",
+                        "text": clean_text,
+                        "duration": round(dur, 2)
+                    })
+                    session.packet_history.append(("text", meta_json))
+                    session.packet_history.append(("bytes", wav_bytes))
+                    session.packet_event.set()
+                    print(f"[Worker] Synthesized {dur:.2f}s in {infer_time:.3f}s on GPU. Packets: {len(session.packet_history)}")
+                except Exception as e:
+                    print(f"[Worker Error] Synthesis failed on '{clean_text}': {e}")
 
         session.text_queue.task_done()
 
@@ -269,11 +342,33 @@ async def ws_audio(websocket: WebSocket, session_id: str):
     print(f"[WebSocket] Client connected: {session_id}")
 
     try:
-        # Keep socket open until client disconnects or session ends
-        while not session.is_done:
-            await asyncio.sleep(0.1)
+        sent_index = 0
+        while True:
+            # Deliver any pending packets from history in sequence
+            while sent_index < len(session.packet_history):
+                pkt_type, pkt_data = session.packet_history[sent_index]
+                if pkt_type == "text":
+                    await websocket.send_text(pkt_data)
+                elif pkt_type == "bytes":
+                    await websocket.send_bytes(pkt_data)
+                sent_index += 1
+
+            if session.is_done and sent_index >= len(session.packet_history):
+                print(f"[WebSocket] All packets delivered for session: {session_id}")
+                break
+
+            session.packet_event.clear()
+            try:
+                await asyncio.wait_for(session.packet_event.wait(), timeout=0.2)
+            except asyncio.TimeoutError:
+                pass
+
+        # Give client 1.5 seconds grace to consume all TCP frames before closing
+        await asyncio.sleep(1.5)
     except WebSocketDisconnect:
         print(f"[WebSocket] Client disconnected: {session_id}")
+    except Exception as e:
+        print(f"[WebSocket Error] {session_id}: {e}")
     finally:
         session.websocket = None
 

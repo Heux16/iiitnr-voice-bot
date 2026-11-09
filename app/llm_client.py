@@ -441,25 +441,31 @@ def _generate(
     last_error: Exception | None = None
 
     for candidate in model_chain(model):
-        try:
-            text = _generate_once(
-                prompt=prompt,
-                system_instruction=system_instruction,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                model=candidate,
-                api_key=api_key,
-                response_mime_type=response_mime_type,
-            )
-        except Exception as error:
-            last_error = error
-            if not _is_model_unavailable(error):
-                raise
-            continue
-
-        if candidate != model:
-            _WORKING_MODEL[model] = candidate
-        return text
+        for attempt in range(4):
+            try:
+                text = _generate_once(
+                    prompt=prompt,
+                    system_instruction=system_instruction,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    model=candidate,
+                    api_key=api_key,
+                    response_mime_type=response_mime_type,
+                )
+                if candidate != model:
+                    _WORKING_MODEL[model] = candidate
+                return text
+            except Exception as error:
+                last_error = error
+                msg = str(error)
+                rate_limited = "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower()
+                if rate_limited and attempt < 3:
+                    wait_time = _parse_retry_delay(error)
+                    time.sleep(wait_time)
+                    continue
+                if not _is_model_unavailable(error):
+                    raise
+                break
 
     raise last_error or LLMCallError("Tidak ada model chat yang bisa dipanggil.")
 

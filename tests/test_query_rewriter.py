@@ -220,6 +220,12 @@ class TestRewriteQuery:
         hasil = rewrite_query("होस्टल के फीस कतेक लागही?", None)
         assert hasil == "What is the fee structure for hostel accommodation?"
 
+    def test_sanitize_rejects_undergenerated_queries(self):
+        assert _sanitize("What is", "fallback query") == "fallback query"
+        assert _sanitize("What", "fallback query") == "fallback query"
+        assert _sanitize("What is the", "fallback query") == "fallback query"
+        assert _sanitize("How to", "fallback query") == "fallback query"
+
     def test_normalize_spoken_acronyms(self):
         assert normalize_spoken_acronyms("प्रिबल IIT Naya Raipur कहां इस्थित है?") == \
                "IIIT Naya Raipur कहां स्थित है?"

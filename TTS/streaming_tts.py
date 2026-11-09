@@ -117,7 +117,7 @@ class StreamingChhattisgarhiTTS:
         config_path: Optional[str] = None,
         voice: str = "Female",  # 'Female' or 'Male'
         use_cuda: bool = True,
-        length_scale: float = 1.1,  # 1.0 = normal, >1.0 slower, <1.0 faster
+        length_scale: float = 0.80,  # 0.80 = 1.25x faster speed (1.0 = normal, >1.0 slower)
     ):
         base_dir = os.path.join(_current_dir, "chattisgarhi-tts-models", voice)
         self.checkpoint_path = checkpoint_path or os.path.join(base_dir, "best_model.pth")

@@ -39,7 +39,7 @@ from app.config import (
 )
 from app.llm_client import LLMConfigError, call_llm, call_llm_stream, effective_model
 from app.pdf_viewer import render_pdf_viewer, render_source_references
-from app.prompt_builder import build_no_context_response, build_prompt
+from app.prompt_builder import build_no_context_response, build_prompt, detect_query_language
 from app.public_config import (
     app_mode,
     is_operator_mode,
@@ -148,8 +148,11 @@ def transcribe_audio_via_stt(audio_bytes: bytes, language: str = "auto") -> dict
         return {"error": str(e)}
 
 
-def render_streaming_tts_player(session_id: str) -> None:
-    """Embed Web Audio API real-time queue player connected via WebSocket to local GPU TTS server."""
+def render_streaming_tts_player(session_id: str, direct_audio_b64: Optional[str] = None) -> None:
+    """Embed Web Audio API real-time queue player connected via WebSocket to local GPU TTS server.
+    Includes sequential Promise decoding, buffer time tracking, and direct audio fallback.
+    """
+    safe_b64 = direct_audio_b64 or ""
     html_code = f"""
     <div id="tts-player-box" style="
       background: #f0fdf4;
@@ -182,10 +185,14 @@ def render_streaming_tts_player(session_id: str) -> None:
     <script>
     (function() {{
       const sessionId = "{session_id}";
+      const directB64 = "{safe_b64}";
       const wsUrl = "ws://127.0.0.1:8000/ws_audio/" + sessionId;
       let nextStartTime = 0;
       let ws = null;
       let sentenceCount = 0;
+      let playQueue = Promise.resolve();
+      let doneScheduled = false;
+      let audioReceived = false;
 
       function getAudioContext() {{
         const parentWin = window.parent || window;
@@ -223,17 +230,100 @@ def render_streaming_tts_player(session_id: str) -> None:
         }}
       }};
 
+      function scheduleAudioChunk(arrayBuffer) {{
+        audioReceived = true;
+        playQueue = playQueue.then(async () => {{
+          try {{
+            const ctx = getAudioContext();
+            if (ctx && ctx.state === 'suspended') {{
+              await ctx.resume();
+            }}
+            const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+
+            const startTime = Math.max(ctx.currentTime, nextStartTime);
+            source.start(startTime);
+            nextStartTime = startTime + audioBuffer.duration;
+            console.log("[TTS] Audio chunk scheduled: dur=" + audioBuffer.duration.toFixed(2) + "s, finishAt=" + nextStartTime.toFixed(2) + "s");
+          }} catch (err) {{
+            console.error("[TTS] Audio decode error:", err);
+          }}
+        }});
+      }}
+
+      function handlePlaybackDone() {{
+        if (doneScheduled) return;
+        doneScheduled = true;
+        const parentWin = window.parent || window;
+        const synth = parentWin.speechSynthesis || window.speechSynthesis;
+
+        function finish() {{
+          const el = document.getElementById('tts-status');
+          if (el) el.innerText = 'Voice narration complete (' + sentenceCount + ' sentences)';
+          const btn = document.getElementById('tts-btn');
+          if (btn) {{
+            btn.innerText = "✓ Done";
+            btn.style.background = "#64748b";
+          }}
+          if (parentWin.__iiitnr_vad_controller__ && typeof parentWin.__iiitnr_vad_controller__.onBotSpeechCompleted === 'function') {{
+            console.log("[TTS] Firing onBotSpeechCompleted()");
+            parentWin.__iiitnr_vad_controller__.onBotSpeechCompleted();
+          }}
+        }}
+
+        if (synth && synth.speaking) {{
+          const checkSpeaking = setInterval(() => {{
+            if (!synth.speaking) {{
+              clearInterval(checkSpeaking);
+              finish();
+            }}
+          }}, 200);
+        }} else {{
+          playQueue.then(() => {{
+            const ctx = getAudioContext();
+            const remainingSec = ctx ? Math.max(0, nextStartTime - ctx.currentTime) : 0.5;
+            const delayMs = Math.round(remainingSec * 1000) + 200;
+            console.log("[TTS] Playback completion scheduled in " + delayMs + "ms");
+            setTimeout(finish, delayMs);
+          }});
+        }}
+      }}
+
+      // Fallback: If WebSocket does not deliver chunks within 1200ms and direct base64 audio is available
+      if (directB64) {{
+        setTimeout(async () => {{
+          if (!audioReceived) {{
+            console.log("[TTS] WebSocket timed out or empty; playing direct audio fallback...");
+            try {{
+              const ctx = getAudioContext();
+              if (ctx && ctx.state === 'suspended') await ctx.resume();
+              const binaryStr = atob(directB64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) {{
+                bytes[i] = binaryStr.charCodeAt(i);
+              }}
+              sentenceCount = 1;
+              scheduleAudioChunk(bytes.buffer.slice(0));
+              handlePlaybackDone();
+            }} catch (e) {{
+              console.error("[TTS] Direct fallback error:", e);
+            }}
+          }}
+        }}, 1200);
+      }}
+
       try {{
         ws = new WebSocket(wsUrl);
         ws.binaryType = 'arraybuffer';
 
         ws.onopen = function() {{
           const el = document.getElementById('tts-status');
-          if (el) el.innerText = "Listening to live voice stream...";
+          if (el) el.innerText = "Connected to live voice stream...";
         }};
 
         ws.onmessage = async function(e) {{
-          const ctx = getAudioContext();
           if (typeof e.data === 'string') {{
             try {{
               const meta = JSON.parse(e.data);
@@ -244,41 +334,48 @@ def render_streaming_tts_player(session_id: str) -> None:
                   const snippet = meta.text.length > 45 ? meta.text.substring(0, 45) + '...' : meta.text;
                   el.innerText = 'Sentence ' + sentenceCount + ': ' + snippet;
                 }}
+                if (/[a-zA-Z]{2,}/.test(meta.text) && !/[\u0900-\u097F]/.test(meta.text)) {{
+                  // Fallback: only trigger browser Web Speech if server does not stream binary audio chunks
+                  setTimeout(() => {{
+                    if (!audioReceived) {{
+                      try {{
+                        const parentWin = window.parent || window;
+                        const synth = parentWin.speechSynthesis || window.speechSynthesis;
+                        if (synth) {{
+                          const utter = new parentWin.SpeechSynthesisUtterance(meta.text);
+                          utter.lang = 'en-US';
+                          utter.rate = 1.0;
+                          synth.speak(utter);
+                        }}
+                      }} catch (synthErr) {{
+                        console.warn('[TTS] SpeechSynthesis error:', synthErr);
+                      }}
+                    }}
+                  }}, 400);
+                }}
               }} else if (meta.type === 'done') {{
-                const delayMs = ctx ? Math.max(0, (nextStartTime - ctx.currentTime) * 1000) : 1000;
-                setTimeout(() => {{
-                  const el = document.getElementById('tts-status');
-                  if (el) el.innerText = 'Voice narration complete (' + sentenceCount + ' sentences)';
-                  const btn = document.getElementById('tts-btn');
-                  if (btn) {{
-                    btn.innerText = "✓ Done";
-                    btn.style.background = "#64748b";
-                  }}
-                }}, delayMs);
+                handlePlaybackDone();
               }}
             }} catch (err) {{}}
-          }} else if (e.data instanceof ArrayBuffer && ctx) {{
-            try {{
-              if (ctx.state === 'suspended') {{
-                await ctx.resume();
-              }}
-              const audioBuffer = await ctx.decodeAudioData(e.data);
-              const source = ctx.createBufferSource();
-              source.buffer = audioBuffer;
-              source.connect(ctx.destination);
-              
-              const startTime = Math.max(ctx.currentTime, nextStartTime);
-              source.start(startTime);
-              nextStartTime = startTime + audioBuffer.duration;
-            }} catch (err) {{
-              console.error("Audio decode error:", err);
-            }}
+          }} else if (e.data instanceof ArrayBuffer) {{
+            scheduleAudioChunk(e.data);
           }}
         }};
 
         ws.onerror = function(err) {{
-          const el = document.getElementById('tts-status');
-          if (el) el.innerText = "Voice stream offline";
+          console.warn("[TTS] WebSocket offline or closed:", err);
+          if (directB64 && !audioReceived) {{
+            try {{
+              const ctx = getAudioContext();
+              if (ctx && ctx.state === 'suspended') ctx.resume();
+              const binaryStr = atob(directB64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+              sentenceCount = 1;
+              scheduleAudioChunk(bytes.buffer.slice(0));
+              handlePlaybackDone();
+            }} catch (e) {{}}
+          }}
         }};
       }} catch (err) {{
         console.warn("WebSocket init error:", err);
@@ -366,21 +463,31 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
   (function() {
     const currentEnabled = __ENABLED__;
     const currentSilenceSec = __SILENCE_SEC__;
+    const currentCallMode = __CALL_MODE__;
     const parentWin = window.parent || window;
 
-    // 1. Inject Master VAD Script into TOP WINDOW if not already installed
-    if (!parentWin.__iiitnr_vad_installed__ && parentWin.document && parentWin.document.head) {
+    // 1. Inject Master VAD Script into TOP WINDOW
+    if (parentWin.document && parentWin.document.head) {
       try {
-        parentWin.__iiitnr_vad_installed__ = true;
+        const existing = parentWin.document.getElementById('iiitnr-vad-master-script');
+        if (existing) {
+          try { existing.remove(); } catch (e) {}
+        }
         const s = parentWin.document.createElement('script');
         s.id = 'iiitnr-vad-master-script';
         s.textContent = `
           (function() {
-            if (window.__iiitnr_vad_controller__) return;
+            if (window.__iiitnr_vad_controller__) {
+              try {
+                if (window.__iiitnr_vad_controller__.pollTimer) clearInterval(window.__iiitnr_vad_controller__.pollTimer);
+                if (window.__iiitnr_vad_controller__.analysisTimer) clearInterval(window.__iiitnr_vad_controller__.analysisTimer);
+              } catch (e) {}
+            }
 
             const vad = {
               enabled: true,
-              silenceSec: 1.4,
+              silenceSec: 0.9,
+              callMode: false,
               state: 'idle',
               audioCtx: null,
               stream: null,
@@ -399,6 +506,7 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
               configure: function(opts) {
                 if (opts.enabled !== undefined) this.enabled = opts.enabled;
                 if (opts.silenceSec !== undefined) this.silenceSec = opts.silenceSec;
+                if (opts.callMode !== undefined) this.callMode = opts.callMode;
                 if (opts.onUpdate !== undefined) this.onUpdateCb = opts.onUpdate;
                 this.notify();
               },
@@ -410,6 +518,7 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
                       state: this.state,
                       enabled: this.enabled,
                       silenceSec: this.silenceSec,
+                      callMode: this.callMode,
                       speechStarted: this.speechStarted,
                       ...(extra || {})
                     });
@@ -444,6 +553,72 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
                   }
                 } catch (e) {}
                 return null;
+              },
+
+              getRecordButton: function() {
+                try {
+                  // Check if there is an existing recorded audio Clear/Delete button and click it to reset
+                  const clearBtn = document.querySelector(
+                    '[data-testid="stAudioInput"] button[aria-label*="Clear"], ' +
+                    '[data-testid="stAudioInput"] button[aria-label*="Delete"], ' +
+                    '[data-testid="stAudioInput"] button[aria-label*="Remove"]'
+                  );
+                  if (clearBtn) {
+                    console.log("[IIITNR-VAD] Resetting audio input widget via Clear button...");
+                    try { clearBtn.click(); } catch (e) {}
+                    return null;
+                  }
+
+                  // Exact Record button - strictly exclude any button with 'stop'
+                  let btn = document.querySelector('[data-testid="stAudioInputActionButton"][aria-label="Record"]');
+                  if (btn) return btn;
+                  btn = document.querySelector('[data-testid="stAudioInput"] button[aria-label="Record"]');
+                  if (btn) return btn;
+
+                  const allBtns = document.querySelectorAll('[data-testid="stAudioInput"] button');
+                  for (let i = 0; i < allBtns.length; i++) {
+                    const b = allBtns[i];
+                    const l = (b.getAttribute('aria-label') || b.getAttribute('title') || b.innerText || '').toLowerCase();
+                    if (l.includes('record') && !l.includes('stop') && !l.includes('pause') && !l.includes('play')) {
+                      return b;
+                    }
+                  }
+                } catch (e) {}
+                return null;
+              },
+
+              clickRecord: function(recordBtn) {
+                if (this.state === 'listening' || this.state === 'speaking' || this.state === 'stopping') return;
+                const l = (recordBtn.getAttribute('aria-label') || '').toLowerCase();
+                if (l.includes('stop')) return; // Safety: never trigger Stop as Record!
+
+                console.log("[IIITNR-VAD] Activating microphone for user turn...");
+                try {
+                  recordBtn.click();
+                } catch (e) {
+                  console.warn("[IIITNR-VAD] recordBtn.click error:", e);
+                }
+              },
+
+              onBotSpeechCompleted: function() {
+                if (!this.callMode) return;
+                console.log("[IIITNR-VAD] Bot finished speaking in Call Mode. Handing turn to user in 600ms...");
+                this.notify({ state: 'call_transition', message: 'Bot finished speaking • Opening microphone...' });
+
+                setTimeout(() => {
+                  if (!this.callMode) return;
+                  const recordBtn = this.getRecordButton();
+                  if (recordBtn) {
+                    this.clickRecord(recordBtn);
+                  } else {
+                    // Retry in 350ms if Streamlit was clearing or remounting widget
+                    setTimeout(() => {
+                      if (!this.callMode) return;
+                      const retryBtn = this.getRecordButton();
+                      if (retryBtn) this.clickRecord(retryBtn);
+                    }, 350);
+                  }
+                }, 600);
               },
 
               start: function() {
@@ -502,8 +677,6 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
                     });
                     this.stream = stream;
                   }
-
-                  this.stream.getAudioTracks().forEach(t => { t.enabled = true; });
 
                   const ctx = this.getAudioContext();
                   if (ctx.state !== 'running') {
@@ -565,11 +738,11 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
                   const elapsed = now - this.recordStartTime;
 
                   frame++;
-                  if (frame < 12 && !this.speechStarted) {
-                    this.noiseFloor = Math.max(0.003, Math.min(0.022, (this.noiseFloor * 0.7) + (rms * 0.3)));
+                  if (frame < 15 && !this.speechStarted) {
+                    this.noiseFloor = Math.max(0.003, Math.min(0.020, (this.noiseFloor * 0.8) + (rms * 0.2)));
                   }
 
-                  const speechThresh = Math.max(0.020, this.noiseFloor * 2.2);
+                  const speechThresh = Math.max(0.022, this.noiseFloor * 2.2);
 
                   if (elapsed >= 60000) {
                     this.triggerStop(currentBtn);
@@ -578,7 +751,7 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
 
                   if (rms >= speechThresh) {
                     this.speechOnsetCount++;
-                    if (this.speechOnsetCount >= 3) {
+                    if (this.speechOnsetCount >= 2) {
                       this.speechStarted = true;
                       this.lastSpeechTime = now;
                       this.state = 'speaking';
@@ -599,14 +772,16 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
                         remainingSec: remaining
                       });
 
-                      if (silenceMs >= targetMs) {
-                        console.log("[IIITNR-VAD] Silence limit reached (" + this.silenceSec + "s). Auto-stopping!");
+                      // Minimum 1000ms total recording before stopping on silence
+                      // to ensure MediaRecorder produces a valid, non-empty WebM Opus container
+                      if (silenceMs >= targetMs && elapsed >= 1000) {
+                        console.log("[IIITNR-VAD] Silence limit reached (" + this.silenceSec + "s after " + elapsed + "ms). Auto-stopping!");
                         this.triggerStop(currentBtn);
                         return;
                       }
                     } else {
                       this.state = 'listening';
-                      if (elapsed >= 14000) {
+                      if (elapsed >= 15000) {
                         this.triggerStop(currentBtn);
                         return;
                       }
@@ -618,23 +793,35 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
 
               triggerStop: function(btn) {
                 if (this.state === 'stopping') return;
+                const now = Date.now();
+                if (this.recordStartTime && (now - this.recordStartTime < 900)) {
+                  console.log("[IIITNR-VAD] Waiting for minimum audio length before stop...");
+                  return;
+                }
+
                 this.state = 'stopping';
-                this.stoppedAt = Date.now();
+                this.stoppedAt = now;
                 this.notify({ state: 'stopping' });
 
+                console.log("[IIITNR-VAD] Auto-stopping recording button...");
                 try {
                   btn.click();
                 } catch (e) {
-                  console.warn("[IIITNR-VAD] btn.click notice:", e);
+                  console.warn("[IIITNR-VAD] btn.click error:", e);
                 }
-                try {
-                  const opts = { bubbles: true, cancelable: true, view: window };
-                  btn.dispatchEvent(new MouseEvent('mousedown', opts));
-                  btn.dispatchEvent(new MouseEvent('mouseup', opts));
-                  btn.dispatchEvent(new MouseEvent('click', opts));
-                } catch (e) {}
 
-                this.cleanup();
+                if (this.analysisTimer) {
+                  clearInterval(this.analysisTimer);
+                  this.analysisTimer = null;
+                }
+                if (this.sourceNode) {
+                  try { this.sourceNode.disconnect(); } catch (e) {}
+                  this.sourceNode = null;
+                }
+                if (this.analyser) {
+                  try { this.analyser.disconnect(); } catch (e) {}
+                  this.analyser = null;
+                }
               },
 
               cleanup: function() {
@@ -650,11 +837,6 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
                   try { this.analyser.disconnect(); } catch (e) {}
                   this.analyser = null;
                 }
-                if (this.stream) {
-                  try {
-                    this.stream.getAudioTracks().forEach(t => { t.enabled = false; });
-                  } catch (e) {}
-                }
               },
 
               endSession: function() {
@@ -668,6 +850,20 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
 
             window.__iiitnr_vad_controller__ = vad;
             vad.start();
+
+            // Auto-unlock AudioContext on user gesture anywhere in top window
+            const unlockAudio = function() {
+              const AudioCtx = window.AudioContext || window.webkitAudioContext;
+              if (!window.__iiitnr_tts_audio_ctx__ || window.__iiitnr_tts_audio_ctx__.state === 'closed') {
+                if (AudioCtx) window.__iiitnr_tts_audio_ctx__ = new AudioCtx();
+              }
+              if (window.__iiitnr_tts_audio_ctx__ && window.__iiitnr_tts_audio_ctx__.state === 'suspended') {
+                window.__iiitnr_tts_audio_ctx__.resume();
+              }
+            };
+            ['click', 'touchstart', 'keydown'].forEach(evt => {
+              window.addEventListener(evt, unlockAudio, { passive: true });
+            });
           })();
         `;
         parentWin.document.head.appendChild(s);
@@ -692,11 +888,35 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
         return;
       }
 
+      if (data.callMode) {
+        if (data.state === 'call_transition') {
+          dot.style.background = '#8b5cf6';
+          dot.style.boxShadow = '0 0 0 4px rgba(139, 92, 246, 0.4)';
+          text.innerHTML = '⏳ <b>Call Mode:</b> She finished speaking • Opening microphone...';
+          if (meterWrap) meterWrap.style.display = 'none';
+          return;
+        } else if (data.state === 'listening') {
+          dot.style.background = '#22c55e';
+          dot.style.boxShadow = '0 0 0 4px rgba(34, 197, 94, 0.4)';
+          text.innerHTML = '🎙️ <b>Call Active: Your Turn</b> • Speak your question now, she is listening...';
+          if (meterWrap) {
+            meterWrap.style.display = 'flex';
+            const pct = Math.min(100, Math.round((data.rms || 0) * 800));
+            if (meterBar) {
+              meterBar.style.width = pct + '%';
+              meterBar.style.background = '#22c55e';
+            }
+            if (countdown) countdown.innerText = 'CALL';
+          }
+          return;
+        }
+      }
+
       switch (data.state) {
         case 'idle':
           dot.style.background = '#10b981';
           dot.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.2)';
-          text.innerHTML = '⚡ <b>Auto-Stop VAD:</b> Ready • Press Record, recording auto-stops on silence (' + data.silenceSec + 's)';
+          text.innerHTML = (data.callMode ? '📞 <b>Call Mode:</b> Connected • Ready' : '⚡ <b>Auto-Stop VAD:</b> Ready • Press Record, stops on silence (' + data.silenceSec + 's)');
           if (meterWrap) meterWrap.style.display = 'none';
           break;
 
@@ -774,10 +994,11 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
       parentWin.__iiitnr_vad_controller__.configure({
         enabled: currentEnabled,
         silenceSec: currentSilenceSec,
+        callMode: currentCallMode,
         onUpdate: updateWidgetUI
       });
     } else {
-      updateWidgetUI({ enabled: currentEnabled, state: 'idle', silenceSec: currentSilenceSec });
+      updateWidgetUI({ enabled: currentEnabled, state: 'idle', silenceSec: currentSilenceSec, callMode: currentCallMode });
     }
   })();
   </script>
@@ -785,17 +1006,18 @@ VAD_CONTROLLER_HTML_TEMPLATE = """
 """
 
 
-def render_vad_controller(enabled: bool = True, silence_sec: float = 1.4) -> None:
-    """Embed client-side Voice Activity Detection (VAD) Auto-Stop controller.
+def render_vad_controller(enabled: bool = True, silence_sec: float = 0.9, call_mode: bool = False) -> None:
+    """Embed client-side Voice Activity Detection (VAD) Auto-Stop and Call Mode controller.
 
     Watches the Streamlit audio_input widget. When speech begins and is followed by
     `silence_sec` seconds of quiet, it automatically triggers the stop-recording button
     without requiring the user to manually click 'Stop recording'.
+    When call_mode is True, it automatically triggers recording when the bot finishes speaking.
     """
-    html_code = VAD_CONTROLLER_HTML_TEMPLATE.replace(
-        "__ENABLED__", "true" if enabled else "false"
-    ).replace(
-        "__SILENCE_SEC__", str(round(float(silence_sec), 1))
+    html_code = (
+        VAD_CONTROLLER_HTML_TEMPLATE.replace("__ENABLED__", "true" if enabled else "false")
+        .replace("__SILENCE_SEC__", str(round(float(silence_sec), 1)))
+        .replace("__CALL_MODE__", "true" if call_mode else "false")
     )
     st.components.v1.html(html_code, height=44)
 
@@ -980,16 +1202,122 @@ def render_chat_view(
             st.session_state["queued_query"] = selected_sample
             st.rerun()
 
+    call_mode_active = st.session_state.get("call_mode_active", False)
+
+    # 📞 Two-Way Voice Call Banner, Assistant Language Mode & Controller
+    call_col1, call_col2, call_col3 = st.columns([2.5, 1.4, 1.1])
+    with call_col1:
+        if call_mode_active:
+            st.info("📞 **Interactive Voice Call Active** • She speaks → You speak → She answers → Repeat.", icon="🟢")
+        else:
+            st.caption("💡 **Tip:** Start **Voice Call Mode** for a phone-call experience or ask questions below.")
+    with call_col2:
+        lang_mode_options = [
+            "🌐 Auto-Detect (Sticky)",
+            "🌾 Chhattisgarhi (Always)",
+            "🇮🇳 Hindi (Always)",
+            "🇬🇧 English (Always)",
+        ]
+        lang_mode_keys = {
+            "🌐 Auto-Detect (Sticky)": "auto",
+            "🌾 Chhattisgarhi (Always)": "chhattisgarhi",
+            "🇮🇳 Hindi (Always)": "hindi",
+            "🇬🇧 English (Always)": "english",
+        }
+        current_lock = st.session_state.get("assistant_language_lock", "auto")
+        inv_map = {v: k for k, v in lang_mode_keys.items()}
+        current_label = inv_map.get(current_lock, "🌐 Auto-Detect (Sticky)")
+        sel_label = st.selectbox(
+            "🗣️ Assistant Language",
+            options=lang_mode_options,
+            index=lang_mode_options.index(current_label) if current_label in lang_mode_options else 0,
+            key="assistant_lang_mode_widget",
+            help="Lock the assistant's voice and text language. 'Auto-Detect' maintains conversation language stickiness across turns.",
+        )
+        st.session_state["assistant_language_lock"] = lang_mode_keys[sel_label]
+    with call_col3:
+        if not call_mode_active:
+            if st.button("📞 Start Call", type="primary", use_container_width=True):
+                st.session_state["call_mode_active"] = True
+                st.session_state["queued_call_start"] = True
+                st.session_state["vad_auto_stop"] = True
+                st.session_state["audio_input_counter"] = st.session_state.get("audio_input_counter", 0) + 1
+                st.rerun()
+        else:
+            if st.button("🔴 End Call", type="secondary", use_container_width=True):
+                st.session_state["call_mode_active"] = False
+                st.session_state["queued_call_start"] = False
+                st.rerun()
+
     # Session messages initialization
     if "messages" not in st.session_state:
         st.session_state.messages = []
+
+    # If call just started, she speaks first in the selected language!
+    if st.session_state.pop("queued_call_start", False):
+        active_lang = st.session_state.get("assistant_language_lock", "auto")
+        if active_lang == "chhattisgarhi":
+            greeting_text = (
+                "जय जोहार! मैं आईआईआईटी नया रायपुर के अकादमिक सहायिका आंव। "
+                "आप मन मोले प्रवेश, पाठ्यक्रम या परिसर के बारे म कुछु भी पूछ सकथो। "
+                "आप मन का जानना चाहथो?"
+            )
+            st.session_state["active_conversation_language"] = "chhattisgarhi"
+        elif active_lang == "english":
+            greeting_text = (
+                "Hello! I am the academic assistant for IIIT Naya Raipur. "
+                "You can ask me anything about admissions, courses, curriculum, or campus life. "
+                "How may I help you today?"
+            )
+            st.session_state["active_conversation_language"] = "english"
+        else:
+            greeting_text = (
+                "नमस्ते! मैं ट्रिपल आई टी नया रायपुर की अकादमिक सहायिका हूँ। "
+                "आप मुझसे प्रवेश, पाठ्यक्रम या परिसर के बारे में कुछ भी पूछ सकते हैं। "
+                "आप क्या जानना चाहते हैं?"
+            )
+            st.session_state["active_conversation_language"] = "hindi"
+
+        greeting_session_id = uuid.uuid4().hex
+        voice_gender = st.session_state.get("voice_gender", "Female")
+
+        try:
+            requests.post(
+                "http://127.0.0.1:8000/stream_sentence",
+                json={"session_id": greeting_session_id, "text": greeting_text, "voice": voice_gender},
+                timeout=5,
+            )
+            res = requests.post(
+                "http://127.0.0.1:8000/stream_finish",
+                json={"session_id": greeting_session_id},
+                timeout=10,
+            )
+            audio_data = None
+            if res.status_code == 200:
+                b64_audio = res.json().get("audio_base64")
+                if b64_audio:
+                    audio_data = base64.b64decode(b64_audio)
+        except Exception as e:
+            LOGGER.warning("TTS greeting streaming failed: %s", e)
+            audio_data = None
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": greeting_text,
+            "audio": audio_data,
+            "streaming_session_id": greeting_session_id,
+        })
+        st.rerun()
 
     # Display chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🧑‍🎓" if msg["role"] == "user" else "🎓"):
             st.markdown(msg["content"])
             if msg["role"] == "assistant":
-                if msg.get("audio"):
+                if msg.get("streaming_session_id"):
+                    b64_audio = base64.b64encode(msg["audio"]).decode("utf-8") if msg.get("audio") else None
+                    render_streaming_tts_player(msg.pop("streaming_session_id"), direct_audio_b64=b64_audio)
+                elif msg.get("audio"):
                     st.audio(msg["audio"], format="audio/wav")
                 if msg.get("source_refs"):
                     render_source_references(
@@ -1006,9 +1334,17 @@ def render_chat_view(
                     render_retrieval_debug(msg["debug"])
 
     # 🎙️ Voice Input (Chhattisgarhi / Hindi / English)
-    with st.expander("🎙️ Speak your question (Voice Input)", expanded=False):
+    with st.expander("🎙️ Speak your question (Voice Input)", expanded=call_mode_active):
         v_col1, v_col2 = st.columns([2, 1])
         with v_col2:
+            current_assistant_lock = st.session_state.get("assistant_language_lock", "auto")
+            lock_to_stt_idx = {
+                "auto": 0,
+                "chhattisgarhi": 1,
+                "hindi": 2,
+                "english": 3,
+            }
+            default_stt_idx = lock_to_stt_idx.get(current_assistant_lock, 0)
             stt_lang_choice = st.selectbox(
                 "Voice Language",
                 options=[
@@ -1017,7 +1353,7 @@ def render_chat_view(
                     "🇮🇳 Hindi (हिन्दी - Whisper)",
                     "🇬🇧 English (Whisper)",
                 ],
-                index=0,
+                index=default_stt_idx,
                 help="Auto automatically detects English or Hindi. Choose Chhattisgarhi for native Meta MMS 1B model.",
             )
             lang_code_map = {
@@ -1039,19 +1375,27 @@ def render_chat_view(
             if auto_stop_enabled:
                 silence_cutoff = st.select_slider(
                     "Silence Delay",
-                    options=[1.0, 1.2, 1.4, 1.6, 2.0],
-                    value=st.session_state.get("vad_silence_delay", 1.4),
+                    options=[0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 2.0],
+                    value=st.session_state.get("vad_silence_delay", 0.9),
                     key="vad_silence_slider",
                     format_func=lambda x: f"{x}s pause",
                     help="Time to wait after speaking before automatically stopping.",
                 )
                 st.session_state["vad_silence_delay"] = silence_cutoff
             else:
-                silence_cutoff = 1.4
+                silence_cutoff = 0.9
 
         with v_col1:
-            recorded_audio = st.audio_input("Record your question from microphone:")
-            render_vad_controller(enabled=auto_stop_enabled, silence_sec=silence_cutoff)
+            mic_counter = st.session_state.get("audio_input_counter", 0)
+            recorded_audio = st.audio_input(
+                "Record your question from microphone:",
+                key=f"mic_input_{mic_counter}",
+            )
+            render_vad_controller(
+                enabled=auto_stop_enabled,
+                silence_sec=silence_cutoff,
+                call_mode=call_mode_active,
+            )
 
         if recorded_audio is not None:
             raw_audio = recorded_audio.getvalue()
@@ -1079,6 +1423,8 @@ def render_chat_view(
                         }
                         st.toast(f"🗣️ Transcribed [{det_lang.upper()} in {inf_ms}ms]: {recognized_text}", icon="🎙️")
                         st.session_state["queued_query"] = recognized_text
+                        st.session_state["last_audio_language"] = target_lang if target_lang != "auto" else det_lang
+                        st.session_state["audio_input_counter"] = mic_counter + 1
                         st.rerun()
                     else:
                         st.warning("⚠️ No clear speech was detected. Please make sure your microphone is allowed/unmuted and speak closer to the mic.")
@@ -1198,20 +1544,63 @@ def _handle_query(
                 f"*{outcome.effective_query}*"
             )
 
+        audio_lang = st.session_state.pop("last_audio_language", None)
+        lang_lock = st.session_state.get("assistant_language_lock", "auto")
+        effective_hint = lang_lock if lang_lock != "auto" else audio_lang
+        session_lang = st.session_state.get("active_conversation_language")
+        detected_lang = detect_query_language(
+            outcome.original_query,
+            hint_lang=effective_hint,
+            session_lang=session_lang,
+        )
+        st.session_state["active_conversation_language"] = detected_lang
+
+        if operator_mode:
+            st.caption(f"🗣️ Detected query language: **{detected_lang.capitalize()}**")
+
         if outcome.refused:
-            response = build_no_context_response()
+            response = build_no_context_response(language=detected_lang)
             st.markdown(response)
             if operator_mode:
                 render_retrieval_debug(debug)
+
+            enable_tts = st.session_state.get("enable_tts", True)
+            voice_gender = st.session_state.get("voice_gender", "Female")
+            refusal_session_id = uuid.uuid4().hex if enable_tts else None
+            audio_data = None
+            b64_audio = None
+
+            if enable_tts and refusal_session_id:
+                try:
+                    requests.post(
+                        "http://127.0.0.1:8000/stream_sentence",
+                        json={"session_id": refusal_session_id, "text": response, "voice": voice_gender},
+                        timeout=5,
+                    )
+                    res = requests.post(
+                        "http://127.0.0.1:8000/stream_finish",
+                        json={"session_id": refusal_session_id},
+                        timeout=10,
+                    )
+                    if res.status_code == 200:
+                        b64_audio = res.json().get("audio_base64")
+                        if b64_audio:
+                            audio_data = base64.b64decode(b64_audio)
+                except Exception:
+                    pass
+
+                render_streaming_tts_player(refusal_session_id, direct_audio_b64=b64_audio)
+
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": response,
+                "audio": audio_data,
                 "debug": debug,
             })
             return
 
         system_prompt, user_prompt = build_prompt(
-            outcome.original_query, outcome.contexts, chat_history
+            outcome.original_query, outcome.contexts, chat_history, language=detected_lang
         )
 
         enable_tts = st.session_state.get("enable_tts", True)
@@ -1250,9 +1639,8 @@ def _handle_query(
         message_placeholder = st.empty()
         full_response = ""
         sentence_buffer = ""
-        # Only split on genuine sentence endings in Hindi (Danda ।, question mark ?, exclamation !, newline \n)
-        # Excludes period (.) so abbreviations like डॉ., पी.एच.डी., एम.टेक. are not fragmented
-        sentence_delimiter = re.compile(r'([।?!\n])')
+        # Split on sentence endings in Hindi / Chhattisgarhi (Danda ।, ?, !, \n) or English (. followed by space)
+        sentence_delimiter = re.compile(r'([।?!\n]|\.\s+)')
 
         try:
             for chunk in call_llm_stream(user_prompt, system_instruction=system_prompt):
@@ -1710,6 +2098,7 @@ def _operator_main_legacy() -> None:
         st.divider()
         if st.button("🗑️ Clear Conversation"):
             st.session_state.messages = []
+            st.session_state.pop("active_conversation_language", None)
             st.rerun()
 
         st.caption(
@@ -1766,6 +2155,7 @@ def main() -> None:
         st.divider()
         if st.button("🗑️ Clear Conversation", use_container_width=True):
             st.session_state.messages = []
+            st.session_state.pop("active_conversation_language", None)
             st.rerun()
         st.caption("Use this information as guidance. For official administrative decisions, please consult academic administration.")
 

@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-10-30T08:34:28+00:00",
+  "built_at": "2026-11-08T20:00:45+00:00",
   "source_documents": [
     {
       "name": "academic_calendar_2026.md",
@@ -29,13 +29,13 @@
     },
     {
       "name": "btech_cse_curriculum_2022_2024.md",
-      "sha256": "b4194420bf7545fe8079ab56fbf7ac264d0050125b5c91d1ae4ea5c7cc59a352",
-      "size_bytes": 1470,
-      "pages_with_text": 1,
-      "chunks": 1,
+      "sha256": "95443e1eaffb6af3710d3d4f4601b6c62b8f8b99c1305f61f219c9015a666e5a",
+      "size_bytes": 3277,
+      "pages_with_text": 9,
+      "chunks": 9,
       "extraction": {
-        "lines_raw": 14,
-        "lines_kept": 2,
+        "lines_raw": 93,
+        "lines_kept": 72,
         "dropped": {},
         "pages_empty_after_cleaning": []
       }
@@ -68,13 +68,13 @@
     },
     {
       "name": "btech_dsai_curriculum_2022_2024.md",
-      "sha256": "755f6d5be380ac913fe31202d27f88768db85d899331a12ee79accb5e7132599",
-      "size_bytes": 1743,
-      "pages_with_text": 2,
-      "chunks": 2,
+      "sha256": "02c3a47a85090341f49629b19a029a04867c4f3d8a22c96c3854c3a022bab6af",
+      "size_bytes": 3346,
+      "pages_with_text": 9,
+      "chunks": 9,
       "extraction": {
-        "lines_raw": 50,
-        "lines_kept": 37,
+        "lines_raw": 93,
+        "lines_kept": 72,
         "dropped": {},
         "pages_empty_after_cleaning": []
       }
@@ -120,13 +120,13 @@
     },
     {
       "name": "btech_ece_curriculum_2022_2024.md",
-      "sha256": "f202abe215a57bce17bc9776a9321c41da1467244062f799eced497d16074a70",
-      "size_bytes": 1760,
-      "pages_with_text": 2,
-      "chunks": 2,
+      "sha256": "a4cc932ee593101a09417511df2b478ff2150025539a01a27a78bc87d2749709",
+      "size_bytes": 3369,
+      "pages_with_text": 9,
+      "chunks": 9,
       "extraction": {
-        "lines_raw": 48,
-        "lines_kept": 35,
+        "lines_raw": 96,
+        "lines_kept": 75,
         "dropped": {},
         "pages_empty_after_cleaning": []
       }
@@ -887,36 +887,36 @@
     },
     {
       "name": "campus_facilities_and_helpline.md",
-      "sha256": "2bffbae4dbacf729af40ebca98247f723b93c545ff6e1b67e7c0ea87378299d8",
-      "size_bytes": 823,
-      "pages_with_text": 1,
-      "chunks": 1,
+      "sha256": "f4d4b321d39c8711721d5e9bfe3a390a5696418b42c83f1d68bc17be54e67f5e",
+      "size_bytes": 2533,
+      "pages_with_text": 4,
+      "chunks": 4,
       "extraction": {
-        "lines_raw": 26,
-        "lines_kept": 8,
+        "lines_raw": 39,
+        "lines_kept": 19,
         "dropped": {},
         "pages_empty_after_cleaning": []
       }
     },
     {
       "name": "combined_academic_regulations.md",
-      "sha256": "ce46ee83da986cddd54e5138c0f38862745a5ae72e3ae7d7c76575aaad3c799e",
-      "size_bytes": 7476,
-      "pages_with_text": 4,
-      "chunks": 4,
+      "sha256": "3aa136ec6f1d16c94f5fed56c4d79ad997e2fa6e5f8e9f02a726b5d91de6d4df",
+      "size_bytes": 11932,
+      "pages_with_text": 11,
+      "chunks": 11,
       "extraction": {
-        "lines_raw": 98,
-        "lines_kept": 81,
+        "lines_raw": 141,
+        "lines_kept": 101,
         "dropped": {},
         "pages_empty_after_cleaning": []
       }
     },
     {
       "name": "funded_initiatives.md",
-      "sha256": "aa32fdbe6c4706fc0ae5832c0088ad79dfdb9cfea31bf2a80a92fd59dbff8dec",
-      "size_bytes": 19080,
-      "pages_with_text": 16,
-      "chunks": 16,
+      "sha256": "303e0ec1dd85bfb07437d06a33a1a8ada5e5ff7c9a23ba68e1d3c55cce318894",
+      "size_bytes": 28601,
+      "pages_with_text": 23,
+      "chunks": 23,
       "extraction": {
         "lines_raw": 85,
         "lines_kept": 68,
@@ -1214,11 +1214,11 @@
   },
   "stats": {
     "total_documents": 92,
-    "total_chunks": 2484,
-    "total_pages": 2484,
+    "total_chunks": 2523,
+    "total_pages": 2523,
     "max_pages_per_chunk": 1,
     "avg_pages_per_chunk": 1.0,
-    "single_page_chunks": 2484,
-    "avg_chars_per_chunk": 829
+    "single_page_chunks": 2523,
+    "avg_chars_per_chunk": 825
   }
 }

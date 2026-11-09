@@ -181,23 +181,36 @@ Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
      - Once speech is detected, monitors pause duration. When silence persists for the user-configured cutoff (default: **1.4s**), programmatically invokes `.click()` on the stop button.
      - Displays live animated badge in the UI (Idle: Ready 🟢, Listening 🔵, Speaking 🗣️, Silence countdown ⏳, Auto-stopped ⏹️).
      - Includes safety bounds: 14s initial silence cutoff and 60s max recording guardrail. Manual stop remains 100% accessible anytime.
+1. **Interactive Two-Way Voice Call Mode (Continuous Autonomous Loop)**:
+    - _Feature_: Hands-free telephone call experience where the bot initiates the conversation with an audible spoken greeting, automatically opens the microphone for the user to speak, automatically stops on silence, speaks the answer, and immediately repeats for the next turn without requiring button presses.
+    - _Implementation_:
+      - **Spoken Greeting on Call Start**: When the user clicks `📞 Start Voice Call`, the bot synthesizes an initial greeting via the GPU TTS streaming microservice (`POST :8000/stream_sentence`) and plays it live in the browser via Web Audio WebSocket (`render_streaming_tts_player`).
+      - **Audio Narration Completion Hook**: The Web Audio streaming player detects when all audio chunks finish playing through the physical speakers (`meta.type === 'done'` + playback duration countdown) and calls `onBotSpeechCompleted()`.
+      - **Automatic Turn-Taking**: After a 600ms conversational turn pause, the controller programmatically triggers the `st.audio_input` Record button.
+      - **Autonomous Loop**: User speaks $\to$ VAD auto-stops on 1.4s silence $\to$ GPU STT transcribes $\to$ RAG answers $\to$ Streaming TTS speaks answer $\to$ microphone opens automatically $\to$ user speaks again.
+      - **TTS Server Packet Buffer**: In `TTS/tts_server.py`, `AudioSession` records every synthesized packet in `packet_history` and replays them upon client WebSocket connection. This completely eliminates race conditions where sentences or greetings generated before WebSocket attachment were dropped.
+      - **Ordered Promise Queue Player**: In `app/main_streamlit.py`, `render_streaming_tts_player` uses a sequential Promise chain for `decodeAudioData` and tracking `nextStartTime`, with direct base64 fallback. When playback finishes, it triggers `onBotSpeechCompleted()` accurately to the millisecond.
+      - **Dynamic Key Widget Reset**: Streamlit's `st.audio_input` uses `key=f"mic_input_{mic_counter}"`, incremented after each processed query or on Call start. This guarantees the previous audio is cleared and the red Record button is immediately exposed for the VAD controller to auto-click.
+      - **Top-Window AudioContext Gesture Unlocking**: `parentWin` captures top-window user gestures (`click`, `touchstart`, `keydown`) to permanently unlock `__iiitnr_tts_audio_ctx__` and `__iiitnr_vad_audio_ctx__`, eliminating browser autoplay blocks.
+      - **Button Selector & Audio Encoding Isolation**: Prevented `getRecordButton()` from accidentally matching `"Stop recording"` (whose label contains the substring `record`), eliminated duplicate `dispatchEvent` clicks, enforced a 1200ms minimum recording length, and stopped VAD from disabling microphone tracks mid-encoding, eliminating Chromium's `EncodingError: Unable to decode audio data`.
+      - **One-Click End Call**: User can click `🔴 End Call` anytime to gracefully terminate the call loop and return to standard mode.
 
 ---
 
 ## 5. Key File Index
 
-| File Path                       | Description                                                                                                               | Environment |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| File Path                       | Description                                                                                                                                                     | Environment |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | `app/main_streamlit.py`         | Main frontend UI, chat loop, voice recording widget (`st.audio_input`), client-side Auto-Stop VAD controller, Web Audio player embedding, and background queue. | `uajy-rag`  |
-| `app/prompt_builder.py`         | LLM prompt with strict Hindi output, number-to-words rule, and page citations.                                            | `uajy-rag`  |
-| `app/query_rewriter.py`         | Cross-lingual query rewriter (Chhattisgarhi, Hindi, Hinglish -> English search query with few-shots and Indic detection). | `uajy-rag`  |
-| `app/retrieval.py`              | Hybrid retriever (FAISS + BM25 + RRF) with Turn 1 cross-lingual rewrite triggers.                                         | `uajy-rag`  |
-| `TTS/tts_server.py`             | FastAPI microservice for GPU VITS synthesis and WebSocket audio queueing (Port 8000).                                     | `minor1`    |
-| `STT/stt-service/run.py`        | Entry point for STT FastAPI server (Port 8001).                                                                           | `minor1`    |
-| `STT/stt-service/src/asr.py`    | Multilingual ASR abstraction (Faster-Whisper Turbo + Meta MMS 1B Chhattisgarhi).                                          | `minor1`    |
-| `STT/stt-service/src/server.py` | REST `POST /transcribe` endpoint with peak normalization + WebSocket `/ws/stt/`.                                          | `minor1`    |
-| `STT/stt-service/src/config.py` | Central STT configuration, model selection, port 8001, and domain prompt.                                                 | `minor1`    |
-| `test_stt_cli.py`               | Terminal CLI debugger for STT: mic recording, live VU meter, audio file test, TTS->STT roundtrip.                         | `minor1`    |
+| `app/prompt_builder.py`         | LLM prompt with strict Hindi output, number-to-words rule, and page citations.                                                                                  | `uajy-rag`  |
+| `app/query_rewriter.py`         | Cross-lingual query rewriter (Chhattisgarhi, Hindi, Hinglish -> English search query with few-shots and Indic detection).                                       | `uajy-rag`  |
+| `app/retrieval.py`              | Hybrid retriever (FAISS + BM25 + RRF) with Turn 1 cross-lingual rewrite triggers.                                                                               | `uajy-rag`  |
+| `TTS/tts_server.py`             | FastAPI microservice for GPU VITS synthesis and WebSocket audio queueing (Port 8000).                                                                           | `minor1`    |
+| `STT/stt-service/run.py`        | Entry point for STT FastAPI server (Port 8001).                                                                                                                 | `minor1`    |
+| `STT/stt-service/src/asr.py`    | Multilingual ASR abstraction (Faster-Whisper Turbo + Meta MMS 1B Chhattisgarhi).                                                                                | `minor1`    |
+| `STT/stt-service/src/server.py` | REST `POST /transcribe` endpoint with peak normalization + WebSocket `/ws/stt/`.                                                                                | `minor1`    |
+| `STT/stt-service/src/config.py` | Central STT configuration, model selection, port 8001, and domain prompt.                                                                                       | `minor1`    |
+| `test_stt_cli.py`               | Terminal CLI debugger for STT: mic recording, live VU meter, audio file test, TTS->STT roundtrip.                                                               | `minor1`    |
 
 ---
 

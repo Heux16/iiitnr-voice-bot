@@ -14,11 +14,34 @@ _ERROR_MARKERS = (
     "rate limit",
     "api key",
 )
+_REFUSAL_MARKERS = (
+    "नहीं मिली",
+    "नहीं मिला",
+    "नइ मिले हे",
+    "नइ मिले",
+    "not found",
+    "tidak ditemukan",
+    "not mentioned in the provided",
+    "not available in the documents",
+    "not contained in the provided",
+    "does not contain information",
+    "उपलब्ध दस्तावेजों में नहीं",
+    "शैक्षणिक दस्तावेज म नइ",
+    "दस्तावेज म नइ",
+)
 
 
 def has_page_citation(answer: str) -> bool:
     """True if the answer contains at least one page citation."""
     return bool(answer and _PAGE_CITATION_RE.search(answer))
+
+
+def is_refusal_answer(answer: str) -> bool:
+    """True if the answer is a recognized safe refusal or out-of-scope deflection."""
+    if not answer:
+        return False
+    lowered = answer.lower()
+    return any(marker in lowered for marker in _REFUSAL_MARKERS)
 
 
 def is_safe_answer(answer: str) -> bool:
@@ -34,6 +57,8 @@ def is_safe_answer(answer: str) -> bool:
     lowered = answer.lower()
     if any(marker.lower() in lowered for marker in _ERROR_MARKERS):
         return False
+    if is_refusal_answer(answer):
+        return True
     return has_page_citation(answer)
 
 
@@ -59,6 +84,10 @@ def diagnose_answer(answer: str, context_pages: set[int]) -> tuple[str, str] | N
         if "model_disabled" in lowered:
             return "provider_models_unavailable", "Provider model is disabled or unavailable; fallback models also failed."
         return "provider_error", "Provider returned an error; raw details hidden."
+
+    # Polite refusals and deflections legitimately do not cite document pages
+    if is_refusal_answer(answer):
+        return None
 
     if not has_page_citation(answer):
         return "missing_page_citation", "Answer does not contain a citation in 'Page N' format."

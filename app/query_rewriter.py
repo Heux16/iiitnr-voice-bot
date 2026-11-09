@@ -68,9 +68,9 @@ _STRONG_INDIC_WORDS = frozenset({
 })
 
 #: Moderate Indic connectors/pronouns in Roman script.
-#: Requires at least TWO matches (or combination with question) to avoid false positives.
+#: Requires at least TWO distinct matches (or combination with question) to avoid false positives.
 _MODERATE_INDIC_WORDS = frozenset({
-    "hai", "hain", "tha", "thi", "the", "liye", "bhi", "aur", "iska", "iski", "iske",
+    "hai", "hain", "tha", "thi", "liye", "bhi", "aur", "iska", "iski", "iske",
     "uska", "uski", "uske", "inka", "inki", "inke", "unka", "unki", "unke",
     "wahan", "yahan", "idhar", "udhar", "agla", "pichla", "dusra",
     "karna", "karne", "karte", "wale", "wali", "wala",
@@ -188,11 +188,12 @@ def is_indic_or_hinglish(query: str) -> bool:
     if not tokens:
         return False
 
-    strong_matches = sum(1 for t in tokens if t in _STRONG_INDIC_WORDS)
+    unique_tokens = set(tokens)
+    strong_matches = sum(1 for t in unique_tokens if t in _STRONG_INDIC_WORDS)
     if strong_matches >= 1:
         return True
 
-    moderate_matches = sum(1 for t in tokens if t in _MODERATE_INDIC_WORDS)
+    moderate_matches = sum(1 for t in unique_tokens if t in _MODERATE_INDIC_WORDS)
     return moderate_matches >= 2
 
 
@@ -284,8 +285,19 @@ def _sanitize(raw: str, fallback: str) -> str:
     if not text:
         return fallback
 
+    words = text.split()
+    # Reject truncated under-generated query outputs (e.g. "What", "What is", "What is the")
+    if len(words) == 1 and words[0].lower().rstrip("?") in {
+        "what", "how", "who", "when", "where", "why", "which", "is", "are"
+    }:
+        return fallback
+    if len(words) <= 4 and words[-1].lower().rstrip("?") in {
+        "is", "the", "a", "an", "are", "of", "for", "to", "in", "and", "or", "on", "at"
+    }:
+        return fallback
+
     # Model answering the question directly instead of rewriting
-    if len(text.split()) > 40:
+    if len(words) > 40:
         return fallback
 
     return text
@@ -320,7 +332,7 @@ def rewrite_query(
         raw_response = call_utility_llm(
             prompt,
             system_instruction=REWRITE_SYSTEM_PROMPT,
-            max_tokens=64,
+            max_tokens=128,
             api_key=api_key,
         )
         return _sanitize(raw_response, fallback=cleaned_query)
