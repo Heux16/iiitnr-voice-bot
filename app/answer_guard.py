@@ -17,6 +17,8 @@ _ERROR_MARKERS = (
 _REFUSAL_MARKERS = (
     "नहीं मिली",
     "नहीं मिला",
+    "जानकारी नहीं",
+    "जानकारी नइ",
     "नइ मिले हे",
     "नइ मिले",
     "not found",
@@ -25,9 +27,16 @@ _REFUSAL_MARKERS = (
     "not available in the documents",
     "not contained in the provided",
     "does not contain information",
+    "do not have information",
+    "don't have information",
     "उपलब्ध दस्तावेजों में नहीं",
     "शैक्षणिक दस्तावेज म नइ",
     "दस्तावेज म नइ",
+    "मेरे पास जानकारी",
+    "मोर मेर जानकारी",
+    "मोर मेर एखर जानकारी",
+    "केवल संस्थान के",
+    "केवल उपलब्ध शैक्षणिक",
 )
 
 
