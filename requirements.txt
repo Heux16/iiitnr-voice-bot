@@ -1,7 +1,30 @@
-streamlit==1.49.1
-pandas>=2.0.0
-PyMuPDF==1.28.2
-pdfplumber>=0.10.0
+# ==============================================================================
+# Server 1: RAG & Web UI Server (Streamlit + Retrieval Pipeline)
+# Recommended Environment: Python 3.11+ (CPU or GPU)
+# Default Port: 8501 (Streamlit Frontend)
+# ==============================================================================
+
+# --- Web UI & Dashboard ---
+streamlit>=1.49.0
+
+# --- LLM & Cloud Embeddings (Gemini 2.5 Flash / text-embedding-004) ---
+google-genai>=2.0.0
+
+# --- Vector Index & Information Retrieval ---
 faiss-cpu>=1.7.4
-google-genai>=1.0.0
+
+# --- Data Handling & Math ---
+pandas>=2.0.0
 numpy>=1.24.0
+
+# --- Document Parsing & Academic Document Ingestion ---
+pymupdf>=1.24.0
+pdfplumber>=0.10.0
+
+# --- HTTP & WebSocket Client Connectivity (to STT & TTS Microservices) ---
+requests>=2.31.0
+websockets>=13.0
+
+# --- Data Validation & Configuration ---
+pydantic>=2.7.0
+python-dotenv>=1.0.0

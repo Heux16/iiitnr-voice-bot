@@ -1,16 +1,18 @@
-# IIIT-NR Academic Assistant: Full-Duplex Voice AI Handover & Runbook
+# IIIT-NR Academic Assistant: Full-Duplex Multilingual Voice AI Handover & Runbook
 
-This document serves as an exhaustive guide for any future AI agent, developer, or researcher continuing work on the **IIIT-NR Academic RAG Chatbot**. It explains the system architecture, what has been implemented, how each microservice works, known pitfalls/fixes, and step-by-step instructions to run the entire system.
+This document serves as an exhaustive, production-grade guide for any AI agent, engineer, or researcher maintaining or extending the **IIIT-NR Academic RAG Chatbot**. It explains the full-duplex voice architecture, microservices, knowledge base, benchmarking results, voice call persona, latency optimizations, and step-by-step runbook instructions.
 
 ---
 
 ## 1. System Architecture & Flow
 
-The system is a **full-duplex multimodal Voice AI assistant** tailored for the academic policies, admissions, fees, and curriculum of **Dr. SPM IIIT Naya Raipur**. Users can speak in **Chhattisgarhi**, **Hindi**, or **English**, and the assistant retrieves official PDF excerpts, generates the answer in natural Hindi, and narrate it back using a Chhattisgarhi VITS voice model.
+The system is a **full-duplex, multilingual, voice-first Academic AI Assistant** tailored specifically to the official ordinances, admissions, fee structures, curriculum catalogs, and campus regulations of **Dr. SPM IIIT Naya Raipur (IIIT-NR)**.
+
+Users can interact via text or spoken voice in **Chhattisgarhi (छत्तीसगढ़ी)**, **Hindi (हिन्दी)**, and **English**. The assistant retrieves grounded PDF/Markdown source excerpts, formulates a natural spoken answer formatted for a phone counselor persona, and vocalizes it back sentence-by-sentence via a hybrid TTS engine.
 
 ```mermaid
 flowchart TD
-    User([User Voice Input]) -->|Microphone Audio| Streamlit[Streamlit UI :8501]
+    User([User Voice Input]) -->|Microphone Audio / Browser| Streamlit[Streamlit UI :8501]
     Streamlit -->|POST raw WAV| STT[STT Server :8001\nFastAPI + CUDA]
     
     subgraph STT_Engine [STT Dual-Engine Pipeline]
@@ -21,21 +23,24 @@ flowchart TD
     end
 
     TextOut --> QR[Query Rewriter\nGemini 2.5 Flash]
-    QR -->|Devanagari translated to English query| Retrieval[Hybrid Retrieval\nFAISS + BM25 + RRF]
-    Retrieval -->|Top PDF Chunks| LLM[LLM Generator\nGemini 2.5 Flash]
+    QR -->|Cross-lingual translation & context resolution| Retrieval[Hybrid Retrieval\nFAISS + BM25 + RRF]
+    Retrieval -->|Top Grounded Chunks| LLM[LLM Generator\nGemini 2.5 Flash]
     
-    subgraph LLM_Rules [Strict Prompt Guardrails]
-        LLM --> Rule1[Answer directly in natural Hindi Devanagari]
-        LLM --> Rule2[All numbers written in Hindi words, e.g. नब्बे हज़ार रुपये]
-        LLM --> Rule3[Page citations: 📄 Source: Page N — Section]
+    subgraph Voice_Call_Persona [Voice Call Persona Guardrails]
+        LLM --> Rule1[Warm greeting on Turn 1 ONLY - no repetitive greetings on follow-ups]
+        LLM --> Rule2[Zero robotic document references - speak authoritatively as institute counselor]
+        LLM --> Rule3[Devanagari number-to-words normalization - e.g. पंद्रह हज़ार रुपिया / रुपये]
+        LLM --> Rule4[Bracketed citation appended for UI, stripped from speech]
     end
 
-    LLM -->|Streaming Hindi Tokens| Streamlit
-    Streamlit -->|Sentence Queue Background Thread| TTS[TTS Server :8000\nFastAPI + CUDA]
+    LLM -->|Streaming Tokens| Streamlit
+    Streamlit -->|Sentence Queue Background Thread| TTS[TTS Server :8000\nFastAPI Hybrid]
     
-    subgraph TTS_Engine [Chhattisgarhi Coqui VITS]
-        TTS --> VITS[Chhattisgarhi VITS Model\nFemale / Male Checkpoints]
-        VITS --> AudioChunks[22,050 Hz PCM Audio]
+    subgraph TTS_Engine [Hybrid Low-Latency TTS]
+        TTS -->|English| SAPI[Windows SAPI Zira/David\n1.0X Conversational Speed\n~40-110ms Latency]
+        TTS -->|Chhattisgarhi & Hindi| VITS[Coqui VITS GPU Model\n1.25X Speed + Devanagari Phonetics\n~400-600ms Latency]
+        SAPI --> AudioChunks[22,050 Hz PCM Audio]
+        VITS --> AudioChunks
     end
 
     AudioChunks -->|WebSocket /ws_audio/| WebAudio[Browser Web Audio API Player]
@@ -46,218 +51,198 @@ flowchart TD
 
 ## 2. Conda Environments & Hardware Allocation
 
-The host machine is running **Windows 11** with an **NVIDIA GeForce RTX 4050 Laptop GPU** (6GB VRAM, CUDA 12.1).
+The system runs locally on **Windows 11** with an **NVIDIA GeForce RTX Laptop GPU** (CUDA 12.8, PyTorch 2.4.1/2.5.1).
 
 ### Environment 1: `uajy-rag`
-
 - **Python Executable**: `C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe`
-- **Purpose**: Runs the Streamlit web application, LangChain / Google GenAI SDK, FAISS vector search, BM25 retriever, and evaluation pipelines.
-- **Key Packages**: `streamlit==1.49.1`, `google-genai`, `faiss-cpu`, `rank-bm25`, `sentence-transformers`, `requests`.
+- **Purpose**: Runs the Streamlit application, LangChain / Google GenAI SDK, FAISS vector search, BM25 retriever, query rewriter, answer guard, and evaluation benchmark harnesses.
+- **Key Packages**: `streamlit==1.49.1`, `google-genai`, `faiss-cpu`, `rank-bm25`, `sentence-transformers`, `requests`, `numpy`, `pytest`.
 
 ### Environment 2: `minor1`
-
 - **Python Executable**: `C:\Users\ASUS\anaconda3\envs\minor1\python.exe`
-- **Purpose**: Dedicated **GPU Voice Engine** (PyTorch with CUDA 12.1) hosting both TTS and STT servers.
-- **Key Packages**: `torch==2.5.1+cu121`, `torchaudio==2.5.1+cu121`, `faster-whisper==1.2.1`, `transformers==5.16.1`, `silero-vad==6.2.1`, `TTS` (Coqui), `fastapi==0.115.6`, `uvicorn==0.34.0`, `websockets==14.1`, `soundfile==0.13.0`.
+- **Purpose**: Dedicated **GPU Voice Microservices Engine** hosting both the TTS and STT servers.
+- **Key Packages**: `torch==2.5.1+cu121`, `torchaudio`, `faster-whisper==1.2.1`, `transformers`, `silero-vad`, `TTS` (Coqui VITS), `fastapi==0.115.6`, `uvicorn==0.34.0`, `websockets`, `pywin32` (Windows SAPI), `soundfile`.
 - **VRAM Allocation Budget**:
   - Coqui VITS TTS: ~1.2 GB
   - Faster-Whisper `large-v3-turbo` (float16): ~1.5 GB
   - Meta MMS 1B (`hne` adapter, float16): ~1.8 GB
-  - Total GPU VRAM usage: ~4.5 GB / 6.1 GB (Leaves ample headroom).
+  - Total GPU VRAM usage: ~4.5 GB (leaves safe headroom on 6GB VRAM cards).
 
 ---
 
-## 3. How to Start Each Server (Step-by-Step Runbook)
+## 3. Microservices Runbook & Startup Commands
 
-Open three separate terminal tabs (PowerShell or Command Prompt).
+Open three separate terminal sessions in PowerShell:
 
-### Terminal 1: Start the Chhattisgarhi TTS Server (Port 8000)
-
+### Terminal 1: Start the Hybrid TTS Server (Port 8000)
 ```powershell
-Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
-& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" "TTS/tts_server.py"
+Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot\TTS"
+& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" -m uvicorn tts_server:app --host 0.0.0.0 --port 8000
 ```
-
-- **Endpoint**: `http://127.0.0.1:8000`
-- **Health Check**: `curl http://127.0.0.1:8000/health` (Should return `{"status": "ready", "cuda": true}`)
-- **Capabilities**: `/synthesize` (REST), `/stream_sentence` + `/ws_audio/{session_id}` (WebSocket streaming).
+- **Health Check**: `curl http://127.0.0.1:8000/docs` (Returns HTTP 200)
+- **Features**: REST `/synthesize`, WebSocket `/stream_sentence` + `/stream_finish`, packet buffer replay, SAPI English (1.0X), Coqui VITS Devanagari (1.25X).
 
 ### Terminal 2: Start the Multilingual STT Server (Port 8001)
-
 ```powershell
 Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot\STT\stt-service"
 & "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" "run.py"
 ```
-
-- **Endpoint**: `http://127.0.0.1:8001`
-- **Health Check**: `curl http://127.0.0.1:8001/health` (Should return `{"status": "ok", "device": "cuda", "model": "large-v3-turbo"}`)
-- **Capabilities**: `POST /transcribe?language=auto|hne|hi|en` (REST), `/ws/stt/{session_id}` (WebSocket).
+- **Health Check**: `curl http://127.0.0.1:8001/health` (Returns `{"status": "ok", "device": "cuda", "model": "large-v3-turbo"}`)
+- **Features**: REST `POST /transcribe?language=auto|hne|hi|en`, WebSocket streaming `/ws/stt/{session_id}`.
 
 ### Terminal 3: Start the Streamlit Academic Chatbot UI (Port 8501)
-
 ```powershell
 Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
-& "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -m streamlit run app/main_streamlit.py --server.port=8501
+& "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -m streamlit run app/main_streamlit.py --server.port 8501
 ```
-
 - **URL**: Open browser at `http://localhost:8501`
 
 ---
 
-## 4. Summary of Completed Work
+## 4. Voice Call Persona & Anti-Robotic Conversational Rules
 
-### A. Chhattisgarhi TTS & Low-Latency Streaming
+To ensure the AI sounds like a **real human academic counselor speaking on a telephone call**, specific rules were implemented in [`app/prompt_builder.py`](file:///d:/iiit%20nr/sem%205/New%20folder%20(2)/uajy-academic-rag-chatbot/app/prompt_builder.py):
 
-1. **Model Weights**: Coqui VITS models trained on Chhattisgarhi Devanagari text (`female_checkpoint_300000.pth` and `male_checkpoint_300000.pth`, 22,050 Hz, 80 Mels).
-2. **GPU Latency**: 7x–27x faster than real-time playback (~0.15s–0.35s per sentence on RTX 4050).
-3. **Web Audio API Real-time Streaming**:
-   - `TTS/tts_server.py` exposes WebSocket `/ws_audio/{session_id}`.
-   - Sentences are synthesized immediately on GPU and dispatched through WebSocket.
-   - Browser schedules audio chunks seamlessly back-to-back using Web Audio API `AudioContext`.
-1. **Zero-Blocking Streamlit Token Generation**:
-   - LLM generation in `app/main_streamlit.py` uses a background `queue.Queue` thread to send sentences to TTS, ensuring token rendering runs at 100% full Gemini speed without pausing.
-
-### B. Speech-to-Text (STT) Multilingual Architecture
-
-1. **Dual Engine in `STT/stt-service/src/asr.py`**:
-   - **`FasterWhisperEngine`**: Uses `large-v3-turbo` on CUDA `float16`. Handles English, Hindi, and code-mixed Hinglish with automatic language detection.
-   - **`ChhattisgarhiMMSEngine`**: Meta MMS 1B (`facebook/mms-1b-all`) with language-specific adapter `"hne"`.
-1. **`clean_mms_devanagari`**: Re-attaches disconnected vowel signs/matras (`\u093e-\u094c`) caused by CTC alignment.
-2. **REST Transcribe Route**: Added `POST /transcribe` in `server.py` for direct microphone buffer ingestion.
-
-### C. Cross-Lingual Academic Retrieval
-
-1. **The Problem**: Academic documents in `data/` (curriculum, fee circulars, statutes) are in English.
-2. **The Fix in `app/query_rewriter.py`**:
-   - Devanagari detection (`re.search(r"[\u0900-\u097F]", query)`) triggers Gemini utility model to translate Chhattisgarhi/Hindi questions into standalone English search queries (`"नवा रायपुर मा बीटेक के फीस कतेक हे"` $\to$ `"What is the B.Tech fee structure in Naya Raipur"`).
-   - **Turn 1 Bug Fixed**: Previously, `rewrite_query` skipped execution if `chat_history` was empty. It now correctly translates Devanagari even on turn 1.
-
-### D. Critical Bug Fixes & Guardrails
-
-1. **Whisper "Thank you." Silence Hallucination**:
-   - _Cause_: `vad_filter=False` allowed silence/low-level mic noise to reach Whisper's decoder, which defaults to YouTube outro hallucination `"Thank you."`.
-   - _Fix_: Enabled Silero VAD (`threshold=0.25`, `speech_pad_ms=250`), dynamic peak normalization (`data / peak * 0.95`), and explicit silence hallucination filtering.
-1. **Acoustic Model Dropping Numeric Digits (Fee Queries)**:
-   - _Cause_: The VITS phonetic dictionary only contains Devanagari letters (`क-ह`) and vowel signs. ASCII digits (`0-9`) are treated as unknown and discarded.
-   - _Fix_: Instructed LLM via prompt to write all numbers as Hindi words (`नब्बे हज़ार रुपये`, `चार वर्ष`). Also added an automatic regex fallback normalizer (`convert_numbers_in_text`) in `TTS/tts_server.py`.
-1. **Sentence Fragmenting on Abbreviations**:
-   - _Cause_: Sentence regex splitting on period `.` was splitting `डॉ.`, `पी.एच.डी.`, and `एम.टेक.`.
-   - _Fix_: Delimiter regex changed strictly to `([।?!\n])`.
-1. **Windows CTranslate2 CUDA DLL Loading**:
-   - _Cause_: CTranslate2 failed on Windows with `RuntimeError: Library cublas64_12.dll is not found`.
-   - _Fix_: Added `os.add_dll_directory(torch_lib)` pointing to PyTorch's `torch/lib` before importing Faster-Whisper.
-1. **Git LFS Push to Public Fork**:
-   - _Cause_: GitHub rejects large Git LFS binary uploads (>100MB) on public forks without extra billing.
-   - _Fix_: Added `*.pth` to `.gitignore`. Model weights remain cached locally in `TTS/chattisgarhi-tts-models/` and `~/.cache/huggingface/`.
-1. **Streamlit Browser Mic Delay & Bad Results Fix**:
-   - _Cause_: Browser `st.audio_input` sends 44.1/48kHz audio with leading/trailing silence and mouse click spikes (~0.85). Naive peak normalization failed to boost quiet speech, causing Silero VAD to reject it. Faster-Whisper then ran 6-temperature fallback (`[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]`) with `beam_size=5` and mixed Devanagari/English prompts, taking 25+ seconds and hallucinating prompt tokens.
-   - _Fix_:
-     - **Resample First & 99th-Percentile Normalization**: Resample to 16kHz first, remove DC offset, ignore click spikes using 99th percentile, and boost speech up to 25x to 0.85.
-     - **Greedy/Beam 2 Decoding & Capped Temperatures**: Set `beam_size=2` and `temperature=[0.0, 0.2]`, eliminating multi-temperature hangs.
-     - **Domain Hotwords**: Replaced mixed prompt with `hotwords`, preventing cross-script hallucination loops.
-     - **MMS Silence Trimming**: Meta MMS 1B now trims leading/trailing silence before CTC decoding.
-     - **Streamlit Toast Feedback**: Displays `st.toast(...)` showing transcribed text, language, and GPU latency in ms.
-1. **Conversational VAD & Turn-Taking Pause Tolerance**:
-   - _Cause_: `VAD_MIN_SILENCE_MS` was set to 100ms, `min_silence_duration_ms` in Faster-Whisper was 300ms, and `END_OF_SPEECH_SILENCE_MS` was 600ms. Whenever a speaker paused naturally while formulating a query (e.g. _"I want to know\... [0.5s pause] ...CSE opening rank"_), the VAD immediately treated the pause as an end-of-speech cut, registering only the first clause and discarding or splitting the second clause into an isolated fragment.
-   - _Fix_:
-     - `min_silence_duration_ms` in Faster-Whisper increased from 300ms to **1,200ms** (with `speech_pad_ms=400` and `threshold=0.18`), preventing natural thinking pauses from fragmenting the sentence.
-     - `END_OF_SPEECH_SILENCE_MS` increased from 600ms to **1,400ms** (1.4s), matching natural human conversational rhythms.
-     - `VAD_MIN_SILENCE_MS` increased from 100ms to **300ms**, ignoring micro-pauses between consonants.
-     - Automatic script-based language mapping: any Devanagari output is cleanly standardized to `hi` instead of regional misdetections.
-1. **Audio Inspection & Automatic Disk Logging**:
-   - Every audio interaction is automatically logged into `STT/stt-service/logs/audio/`:
-     - `{log_id}_raw.wav`: The unmodified original microphone audio recorded from the browser or CLI.
-     - `{log_id}_processed.wav`: The 16 kHz resampled, DC-offset-subtracted, and gain-normalized audio fed into the ASR models.
-     - `{log_id}_meta.json`: Full diagnostic metadata including latency, SNR, peak, and transcription.
-   - Streamlit Voice Inspector: The voice expander displays a side-by-side audio player for both Raw and Processed audio, so users and researchers can immediately listen to and verify audio quality differences.
-1. **Client-Side Auto-Stop Voice Activity Detection (VAD)**:
-   - _Feature_: In the Streamlit web app, users previously had to manually click the "Stop recording" button after speaking.
-   - _Implementation & Lifetime Resilience_:
-     - **Top-Window Head Injection**: Injects the master VAD controller script directly into `parentWin.document.head`. This decouples the watcher from Streamlit's ephemeral `components.html` iframes, preventing context destruction and cross-realm errors on reruns.
-     - **Hardware WASAPI Re-negotiation Fix**: Uses `track.enabled = false` rather than `track.stop()` during idle periods. Reusing the persistent `MediaStream` prevents Windows audio driver renegotiation locks (`track.muted`) on rapid subsequent questions.
-     - **Singleton AudioContext**: Reuses a single persistent `AudioContext` for VAD (`parentWin.__iiitnr_vad_audio_ctx__`) and one for TTS (`parentWin.__iiitnr_tts_audio_ctx__`). Total active contexts never exceed 2, permanently avoiding the Chromium 6-context hardware ceiling.
-     - **Continuous Turn-Taking**: State machine smoothly loops (`idle` -> `listening` -> `speaking` -> `silence` -> `stopping` -> `idle`) across infinite questions without page refreshes.
-     - Observes `[data-testid="stAudioInputActionButton"][aria-label*="Stop"]` and computes RMS energy at 25 FPS with dynamic noise-floor calibration.
-     - Once speech is detected, monitors pause duration. When silence persists for the user-configured cutoff (default: **1.4s**), programmatically invokes `.click()` on the stop button.
-     - Displays live animated badge in the UI (Idle: Ready 🟢, Listening 🔵, Speaking 🗣️, Silence countdown ⏳, Auto-stopped ⏹️).
-     - Includes safety bounds: 14s initial silence cutoff and 60s max recording guardrail. Manual stop remains 100% accessible anytime.
-1. **Interactive Two-Way Voice Call Mode (Continuous Autonomous Loop)**:
-    - _Feature_: Hands-free telephone call experience where the bot initiates the conversation with an audible spoken greeting, automatically opens the microphone for the user to speak, automatically stops on silence, speaks the answer, and immediately repeats for the next turn without requiring button presses.
-    - _Implementation_:
-      - **Spoken Greeting on Call Start**: When the user clicks `📞 Start Voice Call`, the bot synthesizes an initial greeting via the GPU TTS streaming microservice (`POST :8000/stream_sentence`) and plays it live in the browser via Web Audio WebSocket (`render_streaming_tts_player`).
-      - **Audio Narration Completion Hook**: The Web Audio streaming player detects when all audio chunks finish playing through the physical speakers (`meta.type === 'done'` + playback duration countdown) and calls `onBotSpeechCompleted()`.
-      - **Automatic Turn-Taking**: After a 600ms conversational turn pause, the controller programmatically triggers the `st.audio_input` Record button.
-      - **Autonomous Loop**: User speaks $\to$ VAD auto-stops on 1.4s silence $\to$ GPU STT transcribes $\to$ RAG answers $\to$ Streaming TTS speaks answer $\to$ microphone opens automatically $\to$ user speaks again.
-      - **TTS Server Packet Buffer**: In `TTS/tts_server.py`, `AudioSession` records every synthesized packet in `packet_history` and replays them upon client WebSocket connection. This completely eliminates race conditions where sentences or greetings generated before WebSocket attachment were dropped.
-      - **Ordered Promise Queue Player**: In `app/main_streamlit.py`, `render_streaming_tts_player` uses a sequential Promise chain for `decodeAudioData` and tracking `nextStartTime`, with direct base64 fallback. When playback finishes, it triggers `onBotSpeechCompleted()` accurately to the millisecond.
-      - **Dynamic Key Widget Reset**: Streamlit's `st.audio_input` uses `key=f"mic_input_{mic_counter}"`, incremented after each processed query or on Call start. This guarantees the previous audio is cleared and the red Record button is immediately exposed for the VAD controller to auto-click.
-      - **Top-Window AudioContext Gesture Unlocking**: `parentWin` captures top-window user gestures (`click`, `touchstart`, `keydown`) to permanently unlock `__iiitnr_tts_audio_ctx__` and `__iiitnr_vad_audio_ctx__`, eliminating browser autoplay blocks.
-      - **Button Selector & Audio Encoding Isolation**: Prevented `getRecordButton()` from accidentally matching `"Stop recording"` (whose label contains the substring `record`), eliminated duplicate `dispatchEvent` clicks, enforced a 1200ms minimum recording length, and stopped VAD from disabling microphone tracks mid-encoding, eliminating Chromium's `EncodingError: Unable to decode audio data`.
-      - **One-Click End Call**: User can click `🔴 End Call` anytime to gracefully terminate the call loop and return to standard mode.
+1. **No Repetitive Greetings on Follow-Up Turns:**
+   - **Turn 1 (Call Start):** Greets warmly (*"नमस्ते!"*, *"जय जोहार!"*, *"Hello!"*).
+   - **Turn 2+ (Follow-up turns / ongoing call):** **Strictly omits greetings.** Jumps straight into the answer or uses natural spoken transitions (*"जी बिल्कुल,"*, *"हाँ,"*, *"Sure,"*, *"देखिए,"*).
+2. **Never Mention "Documents" or "Files" in Spoken Text:**
+   - Completely eliminated robotic phrases (*"उपलब्ध शैक्षणिक दस्तावेजों के अनुसार"*, *"दस्तावेजों में यह जानकारी नहीं मिली है"*, *"As per the available documents"*).
+   - The assistant speaks authoritatively as an institute counselor (*"संस्थान के नियमानुसार..."* or direct statements: *"बीटेक की ट्यूशन फीस नब्बे हज़ार रुपये प्रति सेमेस्टर है।"*).
+   - When information is not available: politely states that they do not have that specific information right now and advises contacting the Academic Affairs office.
+3. **Speech & Citation Decoupling:**
+   - The bracketed source citation (`📄 Source: Page N — Section Title`) is appended strictly at the end for the visual UI and answer guard evaluation.
+   - `TTS/tts_server.py`'s `clean_text_for_tts()` automatically strips the citation before synthesis, ensuring the caller never hears raw page numbers read out loud.
+4. **Number-to-Words Normalization for TTS:**
+   - Chhattisgarhi & Hindi: All numbers, currency, percentages, years, and semesters are normalized to full Devanagari words (*पंद्रह हज़ार रुपिया / रुपये*, *दस बजे रात*, *पचहत्तर प्रतिशत*, *आठ दशमलव शून्य*).
+   - English: Spelled out in words (*ninety thousand rupees*, *eight point zero*, *seventy-five percent*).
 
 ---
 
-## 5. Key File Index
+## 5. Benchmarking & Empirical Verification
 
-| File Path                       | Description                                                                                                                                                     | Environment |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `app/main_streamlit.py`         | Main frontend UI, chat loop, voice recording widget (`st.audio_input`), client-side Auto-Stop VAD controller, Web Audio player embedding, and background queue. | `uajy-rag`  |
-| `app/prompt_builder.py`         | LLM prompt with strict Hindi output, number-to-words rule, and page citations.                                                                                  | `uajy-rag`  |
-| `app/query_rewriter.py`         | Cross-lingual query rewriter (Chhattisgarhi, Hindi, Hinglish -> English search query with few-shots and Indic detection).                                       | `uajy-rag`  |
-| `app/retrieval.py`              | Hybrid retriever (FAISS + BM25 + RRF) with Turn 1 cross-lingual rewrite triggers.                                                                               | `uajy-rag`  |
-| `TTS/tts_server.py`             | FastAPI microservice for GPU VITS synthesis and WebSocket audio queueing (Port 8000).                                                                           | `minor1`    |
-| `STT/stt-service/run.py`        | Entry point for STT FastAPI server (Port 8001).                                                                                                                 | `minor1`    |
-| `STT/stt-service/src/asr.py`    | Multilingual ASR abstraction (Faster-Whisper Turbo + Meta MMS 1B Chhattisgarhi).                                                                                | `minor1`    |
-| `STT/stt-service/src/server.py` | REST `POST /transcribe` endpoint with peak normalization + WebSocket `/ws/stt/`.                                                                                | `minor1`    |
-| `STT/stt-service/src/config.py` | Central STT configuration, model selection, port 8001, and domain prompt.                                                                                       | `minor1`    |
-| `test_stt_cli.py`               | Terminal CLI debugger for STT: mic recording, live VU meter, audio file test, TTS->STT roundtrip.                                                               | `minor1`    |
+Three comprehensive benchmark suites have been executed and documented:
+
+### A. 200-Question Comprehensive Trilingual Benchmark (`benchmark_200_test.py`)
+- **Total Questions Evaluated**: 200 (67 Chhattisgarhi, 67 Hindi, 66 English).
+- **Overall Pipeline Pass Rate**: **95.5%** (191/200 passed or safely deflected).
+  - Chhattisgarhi: **97.0%** (57 Passes + 8 Safe Refusals)
+  - Hindi: **98.5%** (58 Passes + 8 Safe Refusals)
+  - English: **90.9%** (53 Passes + 7 Safe Refusals)
+- **Direct Accurate Answers**: 168
+- **Safe Refusals on OOS/Adversarial**: 23 (MBBS, law, personal faculty numbers, exam hacks, chitchat).
+- **Missing Citations**: **0** (100% resolved).
+- **STT Transcription Success**: **100%**.
+- **TTS Audio Synthesis Success**: **100%**.
+- **Report**: [`BENCHMARK_200Q_TRILINGUAL_REPORT.md`](file:///d:/iiit%20nr/sem%205/New%20folder%20(2)/uajy-academic-rag-chatbot/BENCHMARK_200Q_TRILINGUAL_REPORT.md) & [`BLOCKED_AND_REFUSALS_ANALYSIS.md`](file:///d:/iiit%20nr/sem%205/New%20folder%20(2)/uajy-academic-rag-chatbot/BLOCKED_AND_REFUSALS_ANALYSIS.md).
+
+### B. Conversational Spoken Benchmark (`conversational_benchmark_test.py`)
+- **Scope**: 27 realistic spoken inquiries (9 Chhattisgarhi, 9 Hindi, 9 English) featuring colloquial greetings (*"जय जोहार संगी"*, *"नमस्ते भैया"*, *"Hey bro"*), hedges, local dialect terminology (*"सुभीता हे"*, *"खाय-पिये के मेस चार्ज"*), and casual phrasing.
+- **Success Rate**: **92.6%** (25/27 passed or safely deflected).
+- **Report**: [`CONVERSATIONAL_BENCHMARK_REPORT.md`](file:///d:/iiit%20nr/sem%205/New%20folder%20(2)/uajy-academic-rag-chatbot/CONVERSATIONAL_BENCHMARK_REPORT.md).
+
+### C. Multi-Turn Context & Coreference Benchmark (`multiturn_context_test.py`)
+- **Scope**: 6 complete multi-turn dialogues (18 turns total) testing follow-up queries that depend on the previous turn (*"What is its fees?"*, *"उसमें कितना वजीफा मिलता है?"*, *"ओमा कतेक सीट आरक्षित हे?"*).
+- **Resolution Rate**: **94.4%** (17/18 turns passed).
+- **Report**: [`MULTITURN_CONTEXT_BENCHMARK_REPORT.md`](file:///d:/iiit%20nr/sem%205/New%20folder%20(2)/uajy-academic-rag-chatbot/MULTITURN_CONTEXT_BENCHMARK_REPORT.md).
 
 ---
 
-## 6. Git Remote & Repository Setup
+## 6. Latency Profiling & Optimization Roadmap
 
-The primary git remote has been configured for the dedicated IIIT-NR Voice Bot repository:
+### A. Current Latency Profile (Single-Query Breakdown)
+- **STT (Faster-Whisper Turbo CUDA)**: ~350ms (upload + GPU inference).
+- **Query Rewriter (Gemini LLM Call 1)**: ~2,300ms (cross-lingual translation).
+- **Cloud Embedding API (Gemini text-embedding-004)**: ~850ms (network round-trip).
+- **FAISS + BM25 + RRF Fusion**: ~30ms (local in-memory).
+- **Reranker (Gemini LLM Call 2)**: ~1,270ms (listwise scoring of 20 candidates).
+- **LLM Answer Generator (Gemini LLM Call 3)**: ~1,200ms (TTFT ~600ms).
+- **TTS Synthesis**:
+  - English (Windows SAPI): ~78ms (1.0X normal speed).
+  - Chhattisgarhi/Hindi (Coqui GPU VITS): ~550ms (1.25X speed).
+- **Current Total Latency**: ~5.8s – 6.5s.
 
-- **Primary Remote (`origin`)**: `https://github.com/Heux16/iiitnr-voice-bot.git` (Branch: `main`)
-- **Legacy Backup Remote (`uajy-origin`)**: `https://github.com/Heux16/uajy-academic-rag-chatbot.git`
-- **Push Instruction**: Once the repo `iiitnr-voice-bot` is created on GitHub, publish local commits via:
-  ```powershell
-  git push -u origin main
-  ```
+### B. High-Impact Optimizations for Sub-2 Second Voice Response
+1. **Disable or Restrict LLM Reranking (Instant ~1.3s Saving):**
+   - The tuned Reciprocal Rank Fusion (RRF) between FAISS and BM25 already provides high top-1 precision.
+   - Setting `use_rerank = False` in [`app/config.py`](file:///d:/iiit%20nr/sem%205/New%20folder%20(2)/uajy-academic-rag-chatbot/app/config.py) saves **1,270ms** and eliminates 1 of the 3 LLM calls.
+2. **Bypass Query Rewriter on Turn 1 (Instant ~2.2s Saving):**
+   - Using cross-lingual embeddings directly for initial questions eliminates the rewriter LLM call on Turn 1.
+   - For follow-up turns, using a minimal prompt (`max_tokens=32`) reduces rewrite latency to ~450ms.
+3. **In-Memory Query Embedding Cache (Instant ~850ms Saving):**
+   - Adding `@lru_cache(maxsize=1024)` on query embeddings allows recurring questions (fees, admissions, hostel, curfew) to resolve in **0.1ms** instead of 850ms.
+4. **Sentence-by-Sentence Streaming to TTS (Time-to-First-Audio < 1.5s):**
+   - As tokens stream from Gemini, Sentence 1 is pushed to TTS immediately upon sentence delimiter (`।`, `?`, `.`), starting playback in the caller's ear in **~1.2s – 1.8s** while subsequent sentences generate concurrently.
+5. **Pacing Guardrail:**
+   - When running batch evaluation scripts, maintain **4.5-second inter-query pacing** to prevent exceeding the Google Gemini free-tier 15 Requests Per Minute (RPM) ceiling.
 
 ---
 
-## 7. Verification & Automated Test Commands
+## 7. Knowledge Base & Ingestion Index
 
-To verify that the entire codebase remains intact:
+The official knowledge base lives in `data/` and is indexed in `index/`:
 
+| Directory / File | Content | Chunks |
+|---|---|---|
+| `data/general/combined_academic_regulations.md` | Core academic ordinances (75% attendance + 10% medical relaxation, 10-point grading with D=4 pass, SPI/CPI formulas, branch sliding CPI $\ge 8.0$, academic probation, make-up exams, 6-year max duration). | 11 chunks |
+| `data/academics/btech_*_curriculum_*.md` | Cleaned 2022–2024 and 2024–2028 curricula for CSE, DSAI, and ECE with structured tables. | 68 chunks |
+| `data/general/campus_facilities_and_helpline.md` | Health center, 24x7 ambulance, 10:00 PM hostel curfew, anti-ragging. | 14 chunks |
+| `data/general/funded_initiatives.md` | CMIT fellowship (₹15,000–₹25,000/mo, 100% tuition waiver). | 8 chunks |
+| `data/admissions/` | Spot round, CSAB, JoSAA, Chhattisgarh domicile 50% quota, NTPC 15% quota. | 32 chunks |
+| **Total Ingested Chunks** | **2,523 chunks across 33 documents** (FAISS IndexFlatIP + In-Memory BM25). | **2,523** |
+
+To rebuild the vector and lexical index from scratch:
 ```powershell
-# 1. Run all 480 core RAG & cross-lingual query rewriter unit tests
 Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
-& "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -m pytest tests/ -q
-
-# 2. Test TTS server synthesis (Port 8000)
-& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" -c "import requests; r = requests.post('http://127.0.0.1:8000/synthesize', json={'text': 'कंप्यूटर साइंस', 'voice': 'Female'}); print('TTS Status:', r.status_code, 'WAV bytes:', len(r.content))"
-
-# 3. Test STT server transcription (Port 8001)
-& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" -c "import requests, io, soundfile as sf, numpy as np; buf = io.BytesIO(); sf.write(buf, np.zeros(16000), 16000, format='WAV'); r = requests.post('http://127.0.0.1:8001/transcribe?language=auto', data=buf.getvalue()); print('STT Status:', r.status_code, 'Result:', r.json())"
-
-# 4. Interactive Terminal STT Debugger (Mic & Roundtrip)
-& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" test_stt_cli.py
-
-# 5. Quick CLI STT Roundtrip checks
-& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" test_stt_cli.py --synth "नवा रायपुर मा फीस कतेक हे" --lang hne
-& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" test_stt_cli.py --synth "कंप्यूटर साइंस में कितनी सीटें हैं" --lang auto
+& "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" ingestion/build_index.py --yes
 ```
 
 ---
 
-## 7. Recommended Next Steps for Future AI Agents
+## 8. Key File Index
 
-1. **Live Browser WebSocket Streaming for Speech Input**:
-   - Currently, `st.audio_input` records the user's audio buffer and posts it on completion (`POST /transcribe`).
-   - A custom Streamlit component or Web Audio API script can be added to connect directly to `ws://localhost:8001/ws/stt/{session_id}` for **live partial transcription** on screen while the user speaks.
-1. **Audio Narration Toggle**:
-   - Provide a quick toggle in the chat interface to switch between "Voice + Text" and "Text Only" mode.
-1. **External Model Weight Hosting**:
-   - If sharing the repository publicly, create a script (`scripts/download_models.py`) to download the ~950MB VITS `.pth` weights from Hugging Face or Google Drive into `TTS/chattisgarhi-tts-models/`.
+| File Path | Description | Environment |
+|---|---|---|
+| `app/main_streamlit.py` | Main web UI, two-way hands-free voice call loop, Web Audio player, background TTS queue. | `uajy-rag` |
+| `app/prompt_builder.py` | System prompts, voice call persona (no repetitive greetings, no document references), Devanagari numerals. | `uajy-rag` |
+| `app/query_rewriter.py` | Cross-lingual rewriter with Indic detection and multi-turn coreference resolution. | `uajy-rag` |
+| `app/retrieval.py` | Hybrid retriever (FAISS + BM25 + RRF) with `dense_threshold = 0.65`. | `uajy-rag` |
+| `app/answer_guard.py` | Answer diagnostic circuit breaker with multilingual refusal recognizer. | `uajy-rag` |
+| `app/llm_client.py` | Google GenAI client with dynamic retry backoff (`_parse_retry_delay`). | `uajy-rag` |
+| `TTS/tts_server.py` | FastAPI microservice for GPU VITS (1.25X) and Windows SAPI English (1.0X). | `minor1` |
+| `STT/stt-service/run.py` | FastAPI microservice for Faster-Whisper Turbo CUDA STT (Port 8001). | `minor1` |
+| `requirements.txt` | Root RAG & Web UI dependencies (Streamlit, FAISS, Google GenAI, Ingestion). | `uajy-rag` |
+| `TTS/requirements.txt` | Server 2 TTS microservice dependencies (FastAPI, Coqui TTS, PyTorch CUDA, Windows SAPI). | `minor1` |
+| `STT/stt-service/requirements.txt` | Server 3 STT microservice dependencies (FastAPI, Faster-Whisper, Meta MMS 1B, Silero VAD). | `minor1` |
+| `benchmark_200_test.py` | 200-question trilingual evaluation pipeline. | `uajy-rag` |
+| `conversational_benchmark_test.py` | 27-question colloquial dialect evaluation suite. | `uajy-rag` |
+| `multiturn_context_test.py` | 18-turn multi-turn conversational memory & coreference benchmark. | `uajy-rag` |
+
+---
+
+## 9. Verification & Automated Test Commands
+
+To verify that the entire codebase is healthy:
+
+```powershell
+# 1. Run core unit tests (489 tests)
+Set-Location "d:\iiit nr\sem 5\New folder (2)\uajy-academic-rag-chatbot"
+& "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -m pytest tests/ -q
+
+# 2. Test TTS server synthesis (Port 8000)
+& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" -c "import requests; r = requests.post('http://127.0.0.1:8000/synthesize', json={'text': 'कंप्यूटर साइंस', 'voice': 'Female'}); print('TTS Status:', r.status_code, 'Bytes:', len(r.content))"
+
+# 3. Test STT server transcription (Port 8001)
+& "C:\Users\ASUS\anaconda3\envs\minor1\python.exe" -c "import requests, io, soundfile as sf, numpy as np; buf = io.BytesIO(); sf.write(buf, np.zeros(16000), 16000, format='WAV'); r = requests.post('http://127.0.0.1:8001/transcribe?language=auto', data=buf.getvalue()); print('STT Status:', r.status_code, 'Result:', r.json())"
+
+# 4. Run the multi-turn context benchmark (18 turns)
+& "C:\Users\ASUS\anaconda3\envs\uajy-rag\python.exe" -u multiturn_context_test.py
+```
+
+---
+
+## 10. Git Commit & Push Guidelines
+
+Per strict project instructions:
+- **Never run `git commit` or `git push` automatically.** Keep all working tree changes unstaged and uncommitted.
+- The user will review files and manually trigger git operations when ready.

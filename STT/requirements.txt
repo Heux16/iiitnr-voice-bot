@@ -1,0 +1,6 @@
+# ==============================================================================
+# Forwarding Requirements for STT Service
+# Directs to STT/stt-service/requirements.txt
+# ==============================================================================
+-r stt-service/requirements.txt
+

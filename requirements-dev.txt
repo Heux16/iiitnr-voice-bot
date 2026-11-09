@@ -1,3 +1,7 @@
+# ==============================================================================
+# Development & Testing Requirements for RAG & Web UI Server
+# ==============================================================================
 -r requirements.txt
 
+# --- Unit Testing & Test Automation ---
 pytest>=8.0.0

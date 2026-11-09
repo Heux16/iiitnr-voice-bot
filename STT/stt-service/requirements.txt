@@ -1,22 +1,35 @@
-# --- Core ASR / VAD ---
-faster-whisper==1.2.1
-silero-vad==6.2.1
+# ==============================================================================
+# Server 3: Real-Time Streaming STT Microservice (Whisper Large-v3-Turbo & MMS 1B)
+# Recommended Environment: Python 3.10 / 3.11 with CUDA 12.1+
+# Default Port: 8001 (FastAPI REST + WebSocket)
+# ==============================================================================
 
-# --- Server ---
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-websockets==14.1
-pydantic==2.10.4
+# --- Primary ASR Engine (Multilingual Whisper) ---
+faster-whisper>=1.0.0
 
-# --- Audio utils (test client / dev) ---
-numpy==2.2.1
-soundfile==0.13.0
-sounddevice==0.5.1     # only needed for the live-mic test client, not the server itself
+# --- Secondary ASR Engine (Chhattisgarhi Meta MMS 1B) ---
+transformers>=4.40.0
 
-# --- Optional: telephony (Twilio Media Streams / real phone calls) ---
-audioop-lts==0.2.1; python_version >= "3.13"   # audioop is stdlib below 3.13, removed from 3.13+
+# --- PyTorch with CUDA Acceleration ---
+# If using NVIDIA GPU, install the CUDA-enabled build first:
+# pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+torch>=2.1.0
+torchaudio>=2.1.0
 
-# --- Optional: GPU inference ---
-# If you have an NVIDIA GPU and CUDA installed, faster-whisper will use it automatically
-# once you set STT_DEVICE=cuda and STT_COMPUTE_TYPE=float16 in your .env — no extra pip installs needed
-# beyond having the CUDA toolkit / cuDNN available on the system.
+# --- Voice Activity Detection (Silero VAD) ---
+silero-vad>=6.0.0
+
+# --- Web Framework & Async Server ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+websockets>=14.0
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+
+# --- Audio & Numerical Processing ---
+numpy>=1.22.0
+soundfile>=0.12.0
+sounddevice>=0.5.0
+
+# --- Optional: Telephony (Twilio Media Streams / Python 3.13+) ---
+audioop-lts>=0.2.1; python_version >= "3.13"
